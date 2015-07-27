@@ -6,6 +6,7 @@
    :coord [row column]
    :north (when (> row 0) [(dec row) column])
    :south (when (< row (dec rows)) [(inc row) column])
+   :east  (when (< column (dec columns)) [row (inc column)])
    :west  (when (> column 0) [row (dec column)])
    :links #{}})
 
