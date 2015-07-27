@@ -1,6 +1,6 @@
-(ns snergly.core-test
+(ns snergly.grid-test
   (:require [clojure.test :refer :all]
-            [snergly.core :refer :all]))
+            [snergly.grid :refer :all]))
 
 (deftest t-make-cell
   (testing "middle cell"
@@ -82,9 +82,3 @@
       (is (contains? (:links (grid-cell linked-grid 1 3)) [2 3]))
       (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3]))
       )))
-
-(deftest t-maze-binary-tree
-  (print-grid (maze-binary-tree (make-grid 5 5))))
-
-(deftest t-maze-sidewinder
-  (print-grid (maze-sidewinder (make-grid 5 5))))
