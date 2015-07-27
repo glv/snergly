@@ -74,14 +74,14 @@
 
 
 (defn maze-binary-tree [grid]
-  (loop [g grid
+  (loop [grid grid
          [cell & cells] (:cells grid)]
     (let [neighbors (filter identity (map cell [:north :east]))
           neighbor (when-not (empty? neighbors)
                      (rand-nth neighbors))
           new-grid (if (nil? neighbor)
-                     g
-                     (link-cells g cell neighbor))]
+                     grid
+                     (link-cells grid cell neighbor))]
       (if (empty? cells)
         new-grid
         (recur new-grid cells)))))
