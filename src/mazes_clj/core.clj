@@ -6,6 +6,7 @@
    :coord [row column]
    :north (when (> row 0) [(dec row) column])
    :south (when (< row (dec rows)) [(inc row) column])
+   :east  (when (< column (dec columns)) [row (inc column)])
    :west  (when (> column 0) [row (dec column)])
    :links #{}})
 
@@ -35,11 +36,14 @@
 (defn grid-size [{rows :rows columns :columns}]
   (* rows columns))
 
-(defn grid-rows [{cells :cells columns :columns}]
-  (partition columns cells))
+(defn grid-rows [{rows :rows columns :columns}]
+  (for [row (range rows)]
+    (for [column (range columns)]
+      [row column])))
 
-(defn grid-cells [grid]            ; just for a name to parallel grid-rows
-  (:cells grid))
+(defn grid-cells [{rows :rows columns :columns}]
+  (for [row (range rows) column (range columns)]
+    [row column]))
 
 (defn link-cells [{cells :cells :as grid}
                   {cell-coord :coord cell-links :links :as cell} neighbor-coord]
@@ -55,32 +59,32 @@
   (contains? (:links cell) other-cell-coord))
 
 (defn print-grid [{rows :rows columns :columns :as grid}]
-  (println (apply str "+" (repeat columns "---+")))
-  (doseq [row (grid-rows grid)]
-    ;; cell space line
-    (println (apply str "|"
-                    (for [cell row]
-                      (str "   " (if (linked? cell (:east cell))
-                                   " "
-                                   "|")))))
-    ;; southern separator line
-    (println (apply str "+"
-                    (for [cell row]
-                      (str (if (linked? cell (:south cell))
-                             "   "
-                             "---") "+"))))))
+  (let [resolve (partial grid-cell grid)]
+    (println (apply str "+" (repeat columns "---+")))
+    (doseq [row (grid-rows grid)]
+      ;; cell space line
+      (println (apply str "|"
+                      (for [cell (map resolve row)]
+                        (str "   " (if (linked? cell (:east cell))
+                                     " "
+                                     "|")))))
+      ;; southern separator line
+      (println (apply str "+"
+                      (for [cell (map resolve row)]
+                        (str (if (linked? cell (:south cell))
+                               "   "
+                               "---") "+")))))))
 
 
 
 (defn maze-binary-tree [grid]
-  (loop [g grid
-         [cell & cells] (:cells grid)]
-    (let [neighbors (filter identity (map cell [:north :east]))
-          neighbor (when-not (empty? neighbors)
-                     (rand-nth neighbors))
-          new-grid (if (nil? neighbor)
-                     g
-                     (link-cells g cell neighbor))]
-      (if (empty? cells)
-        new-grid
-        (recur new-grid cells)))))
+  (let [resolve (partial grid-cell grid)
+        process-cell
+        (fn [grid cell]
+          (let [neighbors (filter identity (map cell [:north :east]))
+                neighbor (when-not (empty? neighbors)
+                           (rand-nth neighbors))]
+            (if (nil? neighbor)
+              grid
+              (link-cells grid cell neighbor))))]
+    (reduce process-cell grid (map resolve (grid-cells grid)))))
