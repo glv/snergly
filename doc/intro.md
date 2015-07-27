@@ -1,3 +1,3 @@
-# Introduction to mazes-clj
+# Introduction to Snergly
 
 TODO: write [great documentation](http://jacobian.org/writing/what-to-write/)

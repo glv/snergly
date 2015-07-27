@@ -1,26 +1,26 @@
-(ns mazes-clj.core-test
+(ns snergly.core-test
   (:require [clojure.test :refer :all]
-            [mazes-clj.core :refer :all]))
+            [snergly.core :refer :all]))
 
 (deftest t-make-cell
   (testing "middle cell"
     (let [cell (make-cell 3 5 10 15)]
       (are [expected key] (= expected (key cell))
-                        :Cell :type
-                        [3 5] :coord
-                        [2 5] :north
-                        [4 5] :south
-                        [3 6] :east
-                        [3 4] :west
-                        #{}   :links)))
+        :Cell :type
+        [3 5] :coord
+        [2 5] :north
+        [4 5] :south
+        [3 6] :east
+        [3 4] :west
+        #{} :links)))
   (testing "north border cell"
     (let [cell (make-cell 0 5 10 15)]
       (are [expected key] (= expected (key cell))
-                          [0 5] :coord
-                          nil   :north
-                          [1 5] :south
-                          [0 6] :east
-                          [0 4] :west)))
+        [0 5] :coord
+        nil :north
+        [1 5] :south
+        [0 6] :east
+        [0 4] :west)))
   (testing "south border cell"
     (let [cell (make-cell 9 5 10 15)]
       (is (= [9 5] (:coord cell)))
@@ -37,9 +37,9 @@
 (deftest t-make-grid
   (let [grid (make-grid 2 3)]
     (are [expected key] (= expected (key grid))
-                        :Grid :type
-                        2 :rows
-                        3 :columns)
+      :Grid :type
+      2 :rows
+      3 :columns)
     (is (= 6 (count (:cells grid))))
     (is (= (make-cell 1 1 2 3)
            ((:cells grid) 4)))
@@ -85,3 +85,6 @@
 
 (deftest t-maze-binary-tree
   (print-grid (maze-binary-tree (make-grid 5 5))))
+
+(deftest t-maze-sidewinder
+  (print-grid (maze-sidewinder (make-grid 5 5))))
