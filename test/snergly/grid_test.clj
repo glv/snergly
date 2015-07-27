@@ -80,5 +80,4 @@
                                   (grid-cell grid3x5 1 3)
                                   [2 3])]
       (is (contains? (:links (grid-cell linked-grid 1 3)) [2 3]))
-      (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3]))
-      )))
+      (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3])))))

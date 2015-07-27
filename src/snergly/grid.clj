@@ -28,15 +28,15 @@
   ([grid row column]
    ((:cells grid) (cell-index grid row column))))
 
-(defn random-cell [{rows :rows columns :columns :as grid}]
+(defn random-cell [{:keys [rows columns] :as grid}]
   (let [row (rand-int rows)
         column (rand-int columns)]
     (grid-cell grid row column)))
 
-(defn grid-size [{rows :rows columns :columns}]
+(defn grid-size [{:keys [rows columns]}]
   (* rows columns))
 
-(defn grid-rows [{cells :cells columns :columns}]
+(defn grid-rows [{:keys [cells columns]}]
   (partition columns cells))
 
 (defn grid-cells [grid]            ; just for a name to parallel grid-rows
@@ -55,7 +55,7 @@
 (defn linked? [cell other-cell-coord]
   (contains? (:links cell) other-cell-coord))
 
-(defn print-grid [{rows :rows columns :columns :as grid}]
+(defn print-grid [{columns :columns :as grid}]
   (println (apply str "+" (repeat columns "---+")))
   (doseq [row (grid-rows grid)]
     ;; cell space line
