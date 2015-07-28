@@ -31,13 +31,6 @@
         (and (not on-north-side?)
              (= 0 (rand-int 2))))))
 
-(defn sidewinder-continue-run? [cell]
-  (let [east-neighbor (:east cell)
-        north-neighbor (:north cell)]
-    (and east-neighbor
-         (not (and north-neighbor
-                   (= 0 (rand-int 2)))))))
-
 (defn sidewinder-end-run [grid run]
   (let [cell (grid-cell grid (rand-nth run))
         north-neighbor (:north cell)]
