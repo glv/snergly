@@ -12,6 +12,11 @@
    :west  (when (> column 0) [row (dec column)])
    :links #{}})
 
+(defn cell-neighbors
+  ([cell] (cell-neighbors cell [:north :south :east :west]))
+  ([cell directions]
+   (filter identity (map cell directions))))
+
 (defn make-grid
   "Creates and returns a new grid with the specified row and column sizes."
   [rows columns]

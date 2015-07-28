@@ -16,7 +16,7 @@
 
 (defn binary-tree-step [grid coord]
   (let [cell (grid-cell grid coord)
-        neighbors (filter identity (map cell [:north :east]))]
+        neighbors (cell-neighbors cell [:north :east])]
     (if (empty? neighbors)
       grid
       (link-cells grid cell (rand-nth neighbors)))))
