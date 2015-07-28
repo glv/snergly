@@ -36,6 +36,4 @@
         new-grid
         (recur new-grid
                coords
-               (if (empty? processed-run)
-                 [(first coords)]
-                 (conj processed-run (first coords))))))))
+               (conj processed-run (first coords)))))))
