@@ -1,15 +1,15 @@
 (ns snergly.algorithms
   (:require [snergly.grid :refer :all]))
 
+(defn binary-tree-step [grid coord]
+  (let [cell (grid-cell grid coord)
+        neighbors (filter identity (map cell [:north :east]))]
+    (if (empty? neighbors)
+      grid
+      (link-cells grid cell (rand-nth neighbors)))))
+
 (defn maze-binary-tree [grid]
-  (let [process-cell
-        (fn [grid coord]
-          (let [cell (grid-cell grid coord)
-                neighbors (filter identity (map cell [:north :east]))]
-            (if (empty? neighbors)
-              grid
-              (link-cells grid cell (rand-nth neighbors)))))]
-    (reduce process-cell grid (grid-coords grid))))
+  (reduce binary-tree-step grid (grid-coords grid)))
 
 (defn sidewinder-step [grid coord run]
   (let [resolve (partial grid-cell grid)
