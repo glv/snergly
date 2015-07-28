@@ -47,10 +47,11 @@
   (ns-resolve 'snergly.algorithms (symbol (str "maze-" name))))
 
 (defn run-and-print [algorithm-name grid-size]
-  (println (str "running " algorithm-name))
-  (grid/print-grid
-    ((alg-fn algorithm-name) (apply grid/make-grid grid-size)))
-  (println))
+  (let [algorithm (alg-fn algorithm-name)]
+    (println (str "running " algorithm-name))
+    (grid/print-grid
+      (algorithm (apply grid/make-grid grid-size)) true)
+    (println)))
 
 (defn -main [& args]
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]

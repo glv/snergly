@@ -55,18 +55,26 @@
 (defn linked? [cell other-cell-coord]
   (contains? (:links cell) other-cell-coord))
 
-(defn print-grid [{columns :columns :as grid}]
-  (println (apply str "+" (repeat columns "---+")))
-  (doseq [row (grid-rows grid)]
-    ;; cell space line
-    (println (apply str "|"
-                    (for [cell row]
-                      (str "   " (if (linked? cell (:east cell))
-                                   " "
-                                   "|")))))
-    ;; southern separator line
-    (println (apply str "+"
-                    (for [cell row]
-                      (str (if (linked? cell (:south cell))
-                             "   "
-                             "---") "+"))))))
+(defn print-grid
+  ([grid] (print-grid grid false))
+  ([{columns :columns :as grid} print-coords?]
+   (when print-coords?
+     (println (apply str "   " (map #(format "%2d  " %) (range columns))))
+     (print "  "))
+   (println (apply str "+" (repeat columns "---+")))
+   (doseq [row (grid-rows grid)]
+     ;; cell space line
+     (when print-coords?
+       (print (format "%2d" (first (:coord (first row))))))
+     (println (apply str "|"
+                     (for [cell row]
+                       (str "   " (if (linked? cell (:east cell))
+                                    " "
+                                    "|")))))
+     ;; southern separator line
+     (when print-coords? (print "  "))
+     (println (apply str "+"
+                     (for [cell row]
+                       (str (if (linked? cell (:south cell))
+                              "   "
+                              "---") "+")))))))
