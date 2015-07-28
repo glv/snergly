@@ -36,11 +36,14 @@
 (defn grid-size [{:keys [rows columns]}]
   (* rows columns))
 
-(defn grid-rows [{:keys [cells columns]}]
-  (partition columns cells))
+(defn grid-row-coords [{:keys [rows columns]}]
+  (for [row (range rows)]
+    (for [column (range columns)]
+      [row column])))
 
-(defn grid-cells [grid]            ; just for a name to parallel grid-rows
-  (:cells grid))
+(defn grid-coords [{rows :rows columns :columns}]
+  (for [row (range rows) column (range columns)]
+    [row column]))
 
 (defn link-cells [{cells :cells :as grid}
                   {cell-coord :coord cell-links :links :as cell} neighbor-coord]
@@ -58,23 +61,24 @@
 (defn print-grid
   ([grid] (print-grid grid false))
   ([{columns :columns :as grid} print-coords?]
-   (when print-coords?
-     (println (apply str "   " (map #(format "%2d  " %) (range columns))))
-     (print "  "))
-   (println (apply str "+" (repeat columns "---+")))
-   (doseq [row (grid-rows grid)]
-     ;; cell space line
+   (let [resolve (partial grid-cell grid)]
      (when print-coords?
-       (print (format "%2d" (first (:coord (first row))))))
-     (println (apply str "|"
-                     (for [cell row]
-                       (str "   " (if (linked? cell (:east cell))
-                                    " "
-                                    "|")))))
-     ;; southern separator line
-     (when print-coords? (print "  "))
-     (println (apply str "+"
-                     (for [cell row]
-                       (str (if (linked? cell (:south cell))
-                              "   "
-                              "---") "+")))))))
+       (println (apply str "   " (map #(format "%2d  " %) (range columns))))
+       (print "  "))
+     (println (apply str "+" (repeat columns "---+")))
+     (doseq [row (grid-row-coords grid)]
+       ;; cell space line
+       (when print-coords?
+         (print (format "%2d" (ffirst row))))
+       (println (apply str "|"
+                       (for [cell (map resolve row)]
+                         (str "   " (if (linked? cell (:east cell))
+                                      " "
+                                      "|")))))
+       ;; southern separator line
+       (when print-coords? (print "  "))
+       (println (apply str "+"
+                       (for [cell (map resolve row)]
+                         (str (if (linked? cell (:south cell))
+                                "   "
+                                "---") "+"))))))))

@@ -3,19 +3,22 @@
 
 (defn maze-binary-tree [grid]
   (let [process-cell
-        (fn [grid cell]
-          (let [neighbors (filter identity (map cell [:north :east]))
+        (fn [grid coord]
+          (let [cell (grid-cell grid coord)
+                neighbors (filter identity (map cell [:north :east]))
                 neighbor (when-not (empty? neighbors)
                            (rand-nth neighbors))]
             (if (nil? neighbor)
               grid
               (link-cells grid cell neighbor))))]
-    (reduce process-cell grid (grid-cells grid))))
+    (reduce process-cell grid (grid-coords grid))))
 
-(defn sidewinder-step [grid cell run]
-  (let [printing? true ;(= (:coord cell) [1, 0])
-        _ (when printing? (println (str "cell " (:coord cell) ": " cell))
-                          (println (apply str "  run: " (map :coord run))))
+(defn sidewinder-step [grid coord run]
+  (let [resolve (partial grid-cell grid)
+        cell (resolve coord)
+        printing? true ;(= coord [1, 0])
+        _ (when printing? (println (str "cell " coord ": " cell))
+                          (println (apply str "  run: " run)))
         east-side? (nil? (:east cell))
         north-side? (nil? (:north cell))
         finish-run? (or east-side?
@@ -24,24 +27,24 @@
         _ (when printing? (println (str "  east: " east-side? " north: " north-side? " finish: " finish-run?))
                           (when (not finish-run?) (println "linking east")))
         new-grid (if finish-run?
-                   (let [member (rand-nth run)]
+                   (let [member (resolve (rand-nth run))]
                      (when printing? (println (str "  member: " member " linking north? " (not (nil? (:north member))))))
                      (if (:north member)
                        (link-cells grid member (:north member))
                        grid))
                    (link-cells grid cell (:east cell)))
-        _ (when printing? (println (str "  new links: " (:links (grid-cell new-grid (:coord cell))))))]
+        _ (when printing? (println (str "  new links: " (:links (grid-cell new-grid coord)))))]
     [new-grid (if finish-run? [] run)]))
 
 (defn maze-sidewinder [grid]
   (loop [grid grid
-         [cell & cells] (grid-cells grid)
-         current-run [cell]]
-    (let [[new-grid processed-run] (sidewinder-step grid cell current-run)]
-      (if (empty? cells)
+         [coord & coords] (grid-coords grid)
+         current-run [coord]]
+    (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
+      (if (empty? coords)
         new-grid
         (recur new-grid
-               cells
+               coords
                (if (empty? processed-run)
-                 [(first cells)]
-                 (conj processed-run (first cells))))))))
+                 [(first coords)]
+                 (conj processed-run (first coords))))))))

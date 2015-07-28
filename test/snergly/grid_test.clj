@@ -61,17 +61,17 @@
     (is (= (make-cell 2 3 3 5)
            (grid-cell grid3x5 [2 3])))))
 
-(deftest t-grid-rows
+(deftest t-grid-row-coords
   (let [grid3x5 (make-grid 3 5)
-        rowseq (grid-rows grid3x5)]
+        rowseq (grid-row-coords grid3x5)]
     (is (seq? rowseq))
     (is (= 3 (count rowseq)))
     (doseq [row rowseq]
       (is (seq? row))
       (is (= 5 (count row))))
-    (is (= (make-cell 1 3 3 5)
+    (is (= [1 3]
            (-> rowseq (nth 1) (nth 3))))
-    (is (= (make-cell 2 4 3 5)
+    (is (= [2 4]
            (-> rowseq (nth 2) (nth 4))))))
 
 (deftest t-link-cells
