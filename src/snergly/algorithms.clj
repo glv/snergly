@@ -22,7 +22,8 @@
       (link-cells grid cell (rand-nth neighbors)))))
 
 (defn maze-binary-tree [grid]
-  (reduce binary-tree-step grid (grid-coords grid)))
+  (assoc (reduce binary-tree-step grid (grid-coords grid))
+    :algorithm-name "binary-tree"))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (:east cell))
@@ -52,7 +53,7 @@
          current-run [coord]]
     (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
       (if (empty? coords)
-        new-grid
+        (assoc new-grid :algorithm-name "sidewinder")
         (recur new-grid
                coords
                (conj processed-run (first coords)))))))

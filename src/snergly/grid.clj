@@ -1,4 +1,6 @@
-(ns snergly.grid)
+(ns snergly.grid
+  (:import [java.awt Color]
+           [java.awt.image BufferedImage]))
 
 (defn make-cell
   [row column rows columns]
@@ -13,11 +15,13 @@
 (defn make-grid
   "Creates and returns a new grid with the specified row and column sizes."
   [rows columns]
-  {:type    :Grid
-   :rows    rows
-   :columns columns
-   :cells   (into [] (for [row (range rows) column (range columns)]
-                       (make-cell row column rows columns)))})
+  {:type           :Grid
+   ; algorithms should set this to indicate how the grid was generated:
+   :algorithm-name "none"
+   :rows           rows
+   :columns        columns
+   :cells          (into [] (for [row (range rows) column (range columns)]
+                              (make-cell row column rows columns)))})
 
 (defn cell-index
   ([grid [row column]] (cell-index grid row column))
@@ -83,3 +87,25 @@
                          (str (if (linked? cell (:south cell))
                                 "   "
                                 "---") "+"))))))))
+
+(defn image-grid [{:keys [rows columns] :as grid} cell-size]
+  (let [img-width (inc (* cell-size columns))
+        img-height (inc (* cell-size rows))
+        background Color/white
+        wall Color/black
+        img (BufferedImage. img-width img-height BufferedImage/TYPE_INT_RGB)
+        g (.createGraphics img)]
+    (.setColor g background)
+    (.fillRect g 0 0 img-width img-height)
+    (.setColor g wall)
+    (doseq [coord (grid-coords grid)]
+      (let [[y1 x1] (map #(* % cell-size) coord)
+            [y2 x2] (map #(+ % cell-size) [y1 x1])
+            cell (grid-cell grid coord)]
+        (when-not (:north cell) (.drawLine g x1 y1 x2 y1))
+        (when-not (:west cell) (.drawLine g x1 y1 x1 y2))
+
+        (when-not (linked? cell (:east cell)) (.drawLine g x2 y1 x2 y2))
+        (when-not (linked? cell (:south cell)) (.drawLine g x1 y2 x2 y2))
+        ))
+    img))

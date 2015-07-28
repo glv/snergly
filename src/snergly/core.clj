@@ -2,7 +2,9 @@
   (:require [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]
             [snergly.algorithms :refer :all]
-            [snergly.grid :as grid]))
+            [snergly.grid :as grid])
+  (:import [javax.imageio ImageIO]
+           [java.io File]))
 
 (def algorithms
   #{"binary-tree"
@@ -38,20 +40,39 @@
   (System/exit status))
 
 (def cli-options
-  [["-s" "--size DIMENS" "Grid size (e.g. 5 or 8x5)"
+  [["-c" "--cell-size PIXELS" "Size of maze cells. Ignored when rendering as text."
+    :default 10
+    :parse-fn #(Integer/parseInt %)
+    :validate [#(< 0 % 256) "Must be a number between 0 and 256"]]
+   ["-h" "--help"]
+   ["-o" "--output FILENAME" "Write output to an image file (format defined by extension)"]
+   ["-s" "--size DIMENS" "Grid size (e.g. 5 or 8x5)"
     :default [5 5]
-    :parse-fn parse-grid-size]
-   ["-h" "--help"]])
+    :parse-fn parse-grid-size
+    :validate [(fn [[rows columns]]
+                 (let [in-range #(< 1 % 10000)]
+                   (and (in-range rows)
+                        (in-range columns)))) "Grid dimensions must be numbers between 1 and 10,000"]]])
 
 (defn alg-fn [name]
   (ns-resolve 'snergly.algorithms (symbol (str "maze-" name))))
 
-(defn run-and-print [algorithm-name grid-size]
+(defn run-and-render [algorithm-name grid-size render-fn]
   (let [algorithm (alg-fn algorithm-name)]
-    (println (str "running " algorithm-name))
-    (grid/print-grid
-      (algorithm (apply grid/make-grid grid-size)))
-    (println)))
+    (render-fn (algorithm (apply grid/make-grid grid-size)))))
+
+(defn write-grid-to-terminal [grid]
+  (println (str "generated with " (:algorithm-name grid)))
+  (grid/print-grid grid)
+  (println))
+
+(defn file-extension [filename]
+  (re-find #"(?<=\.)[^.]+$" filename))
+
+(defn write-grid-to-image-file [grid ^String filename cell-size]
+  (let [image (grid/image-grid grid cell-size)
+        format (file-extension filename)]
+    (ImageIO/write image format (File. filename))))
 
 (defn -main [& args]
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
@@ -59,14 +80,20 @@
     (cond
       (:help options) (exit 0 (usage summary algorithms))
       (not= (count arguments) 1) (exit 1 (usage summary algorithms))
-      errors (exit 1 (error-msg errors)))
+      errors (exit 1 (error-msg errors))
+      (and (= (first arguments) "all")
+              (:output options)) (exit 1 (error-msg ["You can only write one maze to an output file; do not use '--output' and 'all' at the same time."])))
     ;; Execute program with options
-    (let [algorithm-name (first arguments)]
+    (let [algorithm-name (first arguments)
+          output-file (:output options)
+          render-fn (if output-file
+                      #(write-grid-to-image-file % output-file (:cell-size options))
+                      write-grid-to-terminal)]
       (cond
         (contains? algorithms algorithm-name)
-        (run-and-print algorithm-name (:size options))
+        (run-and-render algorithm-name (:size options) render-fn)
         (= "all" algorithm-name)
         (doseq [algorithm-name algorithms]
-          (run-and-print algorithm-name (:size options)))
+          (run-and-render algorithm-name (:size options) render-fn))
         :else
         (println (str "not running unknown algorithm " algorithm-name))))))
