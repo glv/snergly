@@ -65,6 +65,7 @@
      (when print-coords?
        (println (apply str "   " (map #(format "%2d  " %) (range columns))))
        (print "  "))
+     ;; top border
      (println (apply str "+" (repeat columns "---+")))
      (doseq [row (grid-row-coords grid)]
        ;; cell space line
@@ -75,7 +76,7 @@
                          (str "   " (if (linked? cell (:east cell))
                                       " "
                                       "|")))))
-       ;; southern separator line
+       ;; bottom separator line
        (when print-coords? (print "  "))
        (println (apply str "+"
                        (for [cell (map resolve row)]

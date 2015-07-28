@@ -5,12 +5,10 @@
   (let [process-cell
         (fn [grid coord]
           (let [cell (grid-cell grid coord)
-                neighbors (filter identity (map cell [:north :east]))
-                neighbor (when-not (empty? neighbors)
-                           (rand-nth neighbors))]
-            (if (nil? neighbor)
+                neighbors (filter identity (map cell [:north :east]))]
+            (if (empty? neighbors)
               grid
-              (link-cells grid cell neighbor))))]
+              (link-cells grid cell (rand-nth neighbors)))))]
     (reduce process-cell grid (grid-coords grid))))
 
 (defn sidewinder-step [grid coord run]
