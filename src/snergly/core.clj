@@ -50,7 +50,7 @@
   (let [algorithm (alg-fn algorithm-name)]
     (println (str "running " algorithm-name))
     (grid/print-grid
-      (algorithm (apply grid/make-grid grid-size)) true)
+      (algorithm (apply grid/make-grid grid-size)))
     (println)))
 
 (defn -main [& args]

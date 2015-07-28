@@ -16,24 +16,17 @@
 (defn sidewinder-step [grid coord run]
   (let [resolve (partial grid-cell grid)
         cell (resolve coord)
-        printing? true ;(= coord [1, 0])
-        _ (when printing? (println (str "cell " coord ": " cell))
-                          (println (apply str "  run: " run)))
         east-side? (nil? (:east cell))
         north-side? (nil? (:north cell))
         finish-run? (or east-side?
                         (and (not north-side?)
                              (= 0 (rand-int 2))))
-        _ (when printing? (println (str "  east: " east-side? " north: " north-side? " finish: " finish-run?))
-                          (when (not finish-run?) (println "linking east")))
         new-grid (if finish-run?
                    (let [member (resolve (rand-nth run))]
-                     (when printing? (println (str "  member: " member " linking north? " (not (nil? (:north member))))))
                      (if (:north member)
                        (link-cells grid member (:north member))
                        grid))
-                   (link-cells grid cell (:east cell)))
-        _ (when printing? (println (str "  new links: " (:links (grid-cell new-grid coord)))))]
+                   (link-cells grid cell (:east cell)))]
     [new-grid (if finish-run? [] run)]))
 
 (defn maze-sidewinder [grid]
