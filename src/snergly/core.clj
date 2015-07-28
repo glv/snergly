@@ -1,4 +1,5 @@
 (ns snergly.core
+  (:refer-clojure :exclude [parse-opts])
   (:require [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]
             [snergly.algorithms :refer :all]
