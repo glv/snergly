@@ -50,7 +50,7 @@
     (for [column (range columns)]
       [row column])))
 
-(defn grid-coords [{rows :rows columns :columns}]
+(defn grid-coords [{:keys [rows columns]}]
   (for [row (range rows) column (range columns)]
     [row column]))
 
