@@ -85,6 +85,14 @@
                (peek next-frontier)
                (pop next-frontier))))))
 
+(defn grid-annotate-cells [grid annotation-key value-map]
+  (reduce (fn [grid [cell-coord value]]
+            (assoc-in grid
+                      [:cells (cell-index grid cell-coord) annotation-key]
+                      value))
+          grid
+          value-map))
+
 (defn print-grid
   ([grid] (print-grid grid false))
   ([{columns :columns :as grid} print-coords?]
@@ -100,9 +108,12 @@
          (print (format "%2d" (ffirst row))))
        (println (apply str "|"
                        (for [cell (map resolve row)]
-                         (str "   " (if (linked? cell (:east cell))
-                                      " "
-                                      "|")))))
+                         (str (if (:label cell)
+                                (format " %1x " (:label cell))
+                                "   ")
+                              (if (linked? cell (:east cell))
+                                " "
+                                "|")))))
        ;; bottom separator line
        (when print-coords? (print "  "))
        (println (apply str "+"

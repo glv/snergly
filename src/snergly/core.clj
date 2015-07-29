@@ -19,6 +19,9 @@
     :>> (fn [match] (map #(Integer/parseInt %) (rest match)))
     (throw (Exception. "Grid size should be an integer (for a square grid) or a ROWSxCOLUMNS spec (e.g., 10x20)"))))
 
+(defn parse-cell [spec]
+  (map #(Integer/parseInt %) (rest (re-matches #"^(\d+),(\d+)$" spec))))
+
 (defn usage [options-summary algorithms]
   (->> ["Snergly: run and print a maze generation algorithm."
         ""
@@ -45,6 +48,8 @@
     :default 10
     :parse-fn #(Integer/parseInt %)
     :validate [#(< 0 % 256) "Must be a number between 0 and 256"]]
+   ["-d" "--distances START" "Display result maze with distance labels from a starting cell (e.g., 2,2)."
+    :parse-fn parse-cell]
    ["-h" "--help"]
    ["-o" "--output FILENAME" "Write output to an image file (format defined by extension)"]
    ["-s" "--size DIMENS" "Grid size (e.g. 5 or 8x5)"
@@ -55,12 +60,18 @@
                    (and (in-range rows)
                         (in-range columns)))) "Grid dimensions must be numbers between 1 and 10,000"]]])
 
-(defn alg-fn [name]
-  (ns-resolve 'snergly.algorithms (symbol (str "maze-" name))))
+(defn alg-fn [name options]
+  (let [base-alg (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
+        analysis-alg (when (:distances options)
+                       (fn [grid]
+                         (let [maze (base-alg grid)
+                               distances (grid/grid-distances maze (:distances options)) ]
+                           (grid/grid-annotate-cells maze :label distances))))]
+    (or analysis-alg
+        base-alg)))
 
-(defn run-and-render [algorithm-name grid-size render-fn]
-  (let [algorithm (alg-fn algorithm-name)]
-    (render-fn (algorithm (apply grid/make-grid grid-size)))))
+(defn run-and-render [algorithm grid-size render-fn]
+  (render-fn (algorithm (apply grid/make-grid grid-size))))
 
 (defn write-grid-to-terminal [grid]
   (println (str "generated with " (:algorithm-name grid)))
@@ -92,9 +103,9 @@
                       write-grid-to-terminal)]
       (cond
         (contains? algorithms algorithm-name)
-        (run-and-render algorithm-name (:size options) render-fn)
+        (run-and-render (alg-fn algorithm-name options) (:size options) render-fn)
         (= "all" algorithm-name)
         (doseq [algorithm-name algorithms]
-          (run-and-render algorithm-name (:size options) render-fn))
+          (run-and-render (alg-fn algorithm-name options) (:size options) render-fn))
         :else
         (println (str "not running unknown algorithm " algorithm-name))))))
