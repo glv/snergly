@@ -85,13 +85,16 @@
                (peek next-frontier)
                (pop next-frontier))))))
 
-(defn grid-annotate-cells [grid annotation-key value-map]
-  (reduce (fn [grid [cell-coord value]]
-            (assoc-in grid
-                      [:cells (cell-index grid cell-coord) annotation-key]
-                      value))
-          grid
-          value-map))
+(defn grid-annotate-cells
+  ([grid annotation-key value-map]
+   (grid-annotate-cells grid annotation-key value-map identity))
+  ([grid annotation-key value-map value-xform]
+   (reduce (fn [grid [cell-coord value]]
+             (assoc-in grid
+                       [:cells (cell-index grid cell-coord) annotation-key]
+                       (value-xform value)))
+           grid
+           value-map)))
 
 (defn print-grid
   ([grid] (print-grid grid false))
@@ -109,7 +112,7 @@
        (println (apply str "|"
                        (for [cell (map resolve row)]
                          (str (if (:label cell)
-                                (str " " (Integer/toString (:label cell) 36) " ")
+                                (str " " (:label cell) " ")
                                 "   ")
                               (if (linked? cell (:east cell))
                                 " "
@@ -143,8 +146,6 @@
         (when-not (linked? cell (:south cell)) (.drawLine g x1 y2 x2 y2))
 
         (when (:label cell)
-          (.drawString g
-                       (Integer/toString (:label cell) 36)
-                       (+ x1 7) (- y2 5)))
+          (.drawString g (:label cell) (+ x1 7) (- y2 5)))
         ))
     img))
