@@ -109,7 +109,7 @@
        (println (apply str "|"
                        (for [cell (map resolve row)]
                          (str (if (:label cell)
-                                (format " %1x " (:label cell))
+                                (str " " (Integer/toString (:label cell) 36) " ")
                                 "   ")
                               (if (linked? cell (:east cell))
                                 " "
