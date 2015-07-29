@@ -65,7 +65,7 @@
         analysis-alg (when (:distances options)
                        (fn [grid]
                          (let [maze (base-alg grid)
-                               distances (grid/grid-distances maze (:distances options)) ]
+                               distances (find-distances maze (:distances options)) ]
                            (grid/grid-annotate-cells maze :label distances #(Integer/toString % 36)))))]
     (or analysis-alg
         base-alg)))

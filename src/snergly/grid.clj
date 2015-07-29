@@ -1,6 +1,5 @@
 (ns snergly.grid
-  (:import [clojure.lang PersistentQueue]
-           [java.awt Color]
+  (:import [java.awt Color]
            [java.awt.image BufferedImage]))
 
 (defn make-cell
@@ -67,23 +66,6 @@
 
 (defn linked? [cell other-cell-coord]
   (contains? (:links cell) other-cell-coord))
-
-(defn grid-distances [grid start]
-  (loop [distances {start 0}
-         current start
-         frontier (PersistentQueue/EMPTY)]
-    (let [cell (grid-cell grid current)
-          next-distance (inc (distances current))
-          links (filter #(not (contains? distances %)) (:links cell))
-          next-frontier (apply conj frontier links)]
-      (if (empty? next-frontier)
-        distances
-        (recur (if (empty? links)
-                 distances
-                 (apply assoc distances
-                      (mapcat #(vector % next-distance) links)))
-               (peek next-frontier)
-               (pop next-frontier))))))
 
 (defn grid-annotate-cells
   ([grid annotation-key value-map]

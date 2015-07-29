@@ -1,4 +1,5 @@
 (ns snergly.algorithms
+  (:import  [clojure.lang PersistentQueue])
   (:require [snergly.grid :refer :all]))
 
 ;; Naming conventions:
@@ -57,3 +58,22 @@
         (recur new-grid
                coords
                (conj processed-run (first coords)))))))
+
+(defn find-distances [grid start]
+  (loop [distances {start 0}
+         current start
+         frontier (PersistentQueue/EMPTY)]
+    (let [cell (grid-cell grid current)
+          next-distance (inc (distances current))
+          links (filter #(not (contains? distances %)) (:links cell))
+          next-frontier (apply conj frontier links)]
+      (if (empty? next-frontier)
+        distances
+        (recur (if (empty? links)
+                 distances
+                 (apply assoc distances
+                        (mapcat #(vector % next-distance) links)))
+               (peek next-frontier)
+               (pop next-frontier))))))
+
+
