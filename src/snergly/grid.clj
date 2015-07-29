@@ -141,5 +141,10 @@
 
         (when-not (linked? cell (:east cell)) (.drawLine g x2 y1 x2 y2))
         (when-not (linked? cell (:south cell)) (.drawLine g x1 y2 x2 y2))
+
+        (when (:label cell)
+          (.drawString g
+                       (Integer/toString (:label cell) 36)
+                       (+ x1 7) (- y2 5)))
         ))
     img))
