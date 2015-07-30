@@ -51,6 +51,7 @@
    ["-d" "--distances START" "Display result maze with distance labels from a starting cell (e.g., 2,2)."
     :parse-fn parse-cell]
    ["-h" "--help"]
+   ["-l" "--longest" "Show the longest path through the maze."]
    ["-o" "--output FILENAME" "Write output to an image file (format defined by extension)"]
    ["-p" "--path-to END" "Result maze should show the path from START to END (requires -d)."
     :parse-fn parse-cell]
@@ -64,18 +65,42 @@
 
 
 
-
-
 (defn alg-fn [name options]
+  (let [algorithm (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
+        analyze-distances (fn [maze] (find-distances maze (:distances options)))
+        analyze-path (fn [maze] (find-path maze (:path-to options)
+                                           (analyze-distances maze)))
+        analyze-longest-path (fn [maze]
+                               (let [distances (find-distances maze [0 0])
+                                     distances-from-farthest (find-distances maze (:max-coord distances))]
+                                 (find-path maze (:max-coord distances-from-farthest) distances-from-farthest)))
+        analyze (cond
+                  (:longest options) analyze-longest-path
+                  (:path-to options) analyze-path
+                  (:distances options) analyze-distances
+                  :else (fn [_] {}))]
+    (fn [grid]
+      (let [maze (algorithm grid)
+            analysis (analyze maze)]
+        (grid/grid-annotate-cells maze :label analysis (fn [v] (Integer/toString v 36)))))))
+
+
+(defn alg-fn-2 [name options]
   (let [add-distances (fn [maze]
                         (assoc maze :distances (find-distances maze (:distances options))))
+        add-longest (fn [maze]
+                      (let [updated-maze (assoc maze :distances (find-distances maze (:max-cell (:distances maze))))]
+                        (assoc updated-maze
+                          :path (find-path maze (:max-cell (:distances maze)) ))))
         add-path (fn [maze]
                    (assoc maze :path (find-path maze (:path-to options) (:distances maze))))
         base-alg (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
         algorithm (comp (if (:path-to options) add-path identity)
+                        (if (:longest options) add-longest identity)
                         (if (:distances options) add-distances identity)
                         base-alg)
         annotations-fn (cond
+                         (:longest options) :longest
                          (:path-to options) :path
                          (:distances options) :distances
                          :else (fn [_] {}))]

@@ -64,15 +64,15 @@
          current start
          frontier (PersistentQueue/EMPTY)]
     (let [cell (grid-cell grid current)
-          next-distance (inc (distances current))
+          current-distance (distances current)
           links (filter #(not (contains? distances %)) (:links cell))
           next-frontier (apply conj frontier links)]
       (if (empty? next-frontier)
-        distances
+        (assoc distances :max current-distance :max-coord current)
         (recur (if (empty? links)
                  distances
                  (apply assoc distances
-                        (mapcat #(vector % next-distance) links)))
+                        (mapcat #(vector % (inc current-distance)) links)))
                (peek next-frontier)
                (pop next-frontier))))))
 
@@ -86,3 +86,5 @@
               neighbor (first (filter #(< (distances %) current-distance)
                                       (:links (grid-cell grid current))))]
           (recur neighbor (assoc breadcrumbs neighbor (distances neighbor))))))))
+
+(defn find-longest-path [grid])
