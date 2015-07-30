@@ -84,35 +84,8 @@
             analysis (analyze maze)]
         (grid/grid-annotate-cells maze :label analysis (fn [v] (Integer/toString v 36)))))))
 
-
-(defn alg-fn-2 [name options]
-  (let [add-distances (fn [maze]
-                        (assoc maze :distances (find-distances maze (:distances options))))
-        add-longest (fn [maze]
-                      (let [updated-maze (assoc maze :distances (find-distances maze (:max-cell (:distances maze))))]
-                        (assoc updated-maze
-                          :path (find-path maze (:max-cell (:distances maze)) ))))
-        add-path (fn [maze]
-                   (assoc maze :path (find-path maze (:path-to options) (:distances maze))))
-        base-alg (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
-        algorithm (comp (if (:path-to options) add-path identity)
-                        (if (:longest options) add-longest identity)
-                        (if (:distances options) add-distances identity)
-                        base-alg)
-        annotations-fn (cond
-                         (:longest options) :longest
-                         (:path-to options) :path
-                         (:distances options) :distances
-                         :else (fn [_] {}))]
-    (fn [grid]
-      (let [maze (algorithm grid)]
-        (grid/grid-annotate-cells maze :label (annotations-fn maze) (fn [v] (Integer/toString v 36)))))))
-
 (defn run-and-render [algorithm grid-size render-fn]
-  (let [maze (algorithm (apply grid/make-grid grid-size))]
-    (render-fn maze))
-  ;(render-fn (algorithm (apply grid/make-grid grid-size)))
-  )
+  (render-fn (algorithm (apply grid/make-grid grid-size))))
 
 (defn write-grid-to-terminal [grid]
   (println (str "generated with " (:algorithm-name grid)))
