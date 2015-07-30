@@ -79,7 +79,9 @@
 (defn find-path [grid goal distances]
   (let [origin (:origin distances)]
     (loop [current goal
-           breadcrumbs {origin 0 :origin origin goal (distances goal)}]
+           breadcrumbs {origin 0 :origin origin
+                        goal (distances goal) :max-coord goal
+                        :max (distances goal)}]
       (if (= current origin)
         breadcrumbs
         (let [current-distance (distances current)

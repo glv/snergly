@@ -1,5 +1,5 @@
 (ns snergly.grid
-  (:import [java.awt Color]
+  (:import [java.awt Color Graphics2D]
            [java.awt.image BufferedImage]))
 
 (defn make-cell
@@ -67,16 +67,22 @@
 (defn linked? [cell other-cell-coord]
   (contains? (:links cell) other-cell-coord))
 
-(defn grid-annotate-cells
-  ([grid annotation-key value-map]
-   (grid-annotate-cells grid annotation-key value-map identity))
-  ([grid annotation-key value-map value-xform]
-   (reduce (fn [grid [cell-coord value]]
-             (assoc-in grid
-                       [:cells (cell-index grid cell-coord) annotation-key]
-                       (value-xform value)))
-           grid
-           (filter (comp coll? first) value-map))))
+(defn xform-values [value-xform value-map]
+  "Returns a version of value-map with values transformed by value-xform."
+  (reduce-kv (fn [m k v] (if (coll? k) (assoc m k (value-xform v)) m))
+             {}
+             value-map))
+
+(defn grid-annotate-cells [grid & label-specs]
+  (let [specs (partition 2 label-specs)
+        get-annotations (fn [cell-coord [label value-map]] (vector label (value-map cell-coord)))
+        assoc-cell (fn [cell cell-coord]
+                     (apply assoc cell (mapcat (partial get-annotations cell-coord) specs)))
+        annotate-cell (fn [grid cell-coord]
+                        (update-in grid
+                                   [:cells (cell-index grid cell-coord)]
+                                   assoc-cell cell-coord))]
+    (reduce annotate-cell grid (grid-coords grid))))
 
 (defn print-grid
   ([grid] (print-grid grid false))
@@ -107,6 +113,26 @@
                                 "   "
                                 "---") "+"))))))))
 
+(defn draw-cells [^Graphics2D g grid cell-size draw-fn]
+  (doseq [coord (grid-coords grid)]
+    (let [[y1 x1] (map #(* % cell-size) coord)
+          [y2 x2] (map #(+ % cell-size) [y1 x1])
+          cell (grid-cell grid coord)]
+      (draw-fn g cell cell-size x1 y1 x2 y2))))
+
+(defn draw-cell-background [^Graphics2D g cell cell-size x1 y1 _ _]
+  (let [color (:color cell)]
+    (when color
+      (.setColor g color)
+      (.fillRect g x1 y1 cell-size cell-size))))
+
+(defn draw-cell-walls [^Graphics2D g cell _ x1 y1 x2 y2]
+  (when-not (:north cell) (.drawLine g x1 y1 x2 y1))
+  (when-not (:west cell) (.drawLine g x1 y1 x1 y2))
+
+  (when-not (linked? cell (:east cell)) (.drawLine g x2 y1 x2 y2))
+  (when-not (linked? cell (:south cell)) (.drawLine g x1 y2 x2 y2)))
+
 (defn image-grid [{:keys [rows columns] :as grid} cell-size]
   (let [img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
@@ -116,18 +142,7 @@
         g (.createGraphics img)]
     (.setColor g background)
     (.fillRect g 0 0 img-width img-height)
+    (draw-cells g grid cell-size draw-cell-background)
     (.setColor g wall)
-    (doseq [coord (grid-coords grid)]
-      (let [[y1 x1] (map #(* % cell-size) coord)
-            [y2 x2] (map #(+ % cell-size) [y1 x1])
-            cell (grid-cell grid coord)]
-        (when-not (:north cell) (.drawLine g x1 y1 x2 y1))
-        (when-not (:west cell) (.drawLine g x1 y1 x1 y2))
-
-        (when-not (linked? cell (:east cell)) (.drawLine g x2 y1 x2 y2))
-        (when-not (linked? cell (:south cell)) (.drawLine g x1 y2 x2 y2))
-
-        (when (:label cell)
-          (.drawString g (:label cell) (+ x1 7) (- y2 5)))
-        ))
+    (draw-cells g grid cell-size draw-cell-walls)
     img))

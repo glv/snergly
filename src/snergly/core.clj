@@ -5,7 +5,8 @@
             [snergly.algorithms :refer :all]
             [snergly.grid :as grid])
   (:import [javax.imageio ImageIO]
-           [java.io File]))
+           [java.io File]
+           [java.awt Color]))
 
 (def algorithms
   #{"binary-tree"
@@ -63,7 +64,11 @@
                    (and (in-range rows)
                         (in-range columns)))) "Grid dimensions must be numbers between 1 and 10,000"]]])
 
-
+(defn color-cell [max-distance distance]
+  (let [intensity (/ (float (- max-distance distance)) max-distance)
+        dark (Math/round (* 255 intensity))
+        bright (Math/round (+ 128 (* 127 intensity)))]
+    (Color. dark bright dark)))
 
 (defn alg-fn [name options]
   (let [algorithm (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
@@ -82,7 +87,9 @@
     (fn [grid]
       (let [maze (algorithm grid)
             analysis (analyze maze)]
-        (grid/grid-annotate-cells maze :label analysis (fn [v] (Integer/toString v 36)))))))
+        (grid/grid-annotate-cells maze
+                                  :label (grid/xform-values #(Integer/toString % 36) analysis)
+                                  :color (grid/xform-values #(color-cell (:max analysis) %) analysis))))))
 
 (defn run-and-render [algorithm grid-size render-fn]
   (render-fn (algorithm (apply grid/make-grid grid-size))))
