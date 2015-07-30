@@ -20,7 +20,7 @@
     (throw (Exception. "Grid size should be an integer (for a square grid) or a ROWSxCOLUMNS spec (e.g., 10x20)"))))
 
 (defn parse-cell [spec]
-  (map #(Integer/parseInt %) (rest (re-matches #"^(\d+),(\d+)$" spec))))
+  (vec (map #(Integer/parseInt %) (rest (re-matches #"^(\d+),(\d+)$" spec)))))
 
 (defn usage [options-summary algorithms]
   (->> ["Snergly: run and print a maze generation algorithm."
@@ -52,6 +52,8 @@
     :parse-fn parse-cell]
    ["-h" "--help"]
    ["-o" "--output FILENAME" "Write output to an image file (format defined by extension)"]
+   ["-p" "--path-to END" "Result maze should show the path from START to END (requires -d)."
+    :parse-fn parse-cell]
    ["-s" "--size DIMENS" "Grid size (e.g. 5 or 8x5)"
     :default [5 5]
     :parse-fn parse-grid-size
@@ -60,18 +62,32 @@
                    (and (in-range rows)
                         (in-range columns)))) "Grid dimensions must be numbers between 1 and 10,000"]]])
 
+
+
+
+
 (defn alg-fn [name options]
-  (let [base-alg (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
-        analysis-alg (when (:distances options)
-                       (fn [grid]
-                         (let [maze (base-alg grid)
-                               distances (find-distances maze (:distances options)) ]
-                           (grid/grid-annotate-cells maze :label distances #(Integer/toString % 36)))))]
-    (or analysis-alg
-        base-alg)))
+  (let [add-distances (fn [maze]
+                        (assoc maze :distances (find-distances maze (:distances options))))
+        add-path (fn [maze]
+                   (assoc maze :path (find-path maze (:path-to options) (:distances maze))))
+        base-alg (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
+        algorithm (comp (if (:path-to options) add-path identity)
+                        (if (:distances options) add-distances identity)
+                        base-alg)
+        annotations-fn (cond
+                         (:path-to options) :path
+                         (:distances options) :distances
+                         :else (fn [_] {}))]
+    (fn [grid]
+      (let [maze (algorithm grid)]
+        (grid/grid-annotate-cells maze :label (annotations-fn maze) (fn [v] (Integer/toString v 36)))))))
 
 (defn run-and-render [algorithm grid-size render-fn]
-  (render-fn (algorithm (apply grid/make-grid grid-size))))
+  (let [maze (algorithm (apply grid/make-grid grid-size))]
+    (render-fn maze))
+  ;(render-fn (algorithm (apply grid/make-grid grid-size)))
+  )
 
 (defn write-grid-to-terminal [grid]
   (println (str "generated with " (:algorithm-name grid)))

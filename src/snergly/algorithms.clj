@@ -60,7 +60,7 @@
                (conj processed-run (first coords)))))))
 
 (defn find-distances [grid start]
-  (loop [distances {start 0}
+  (loop [distances {start 0 :origin start}
          current start
          frontier (PersistentQueue/EMPTY)]
     (let [cell (grid-cell grid current)
@@ -76,4 +76,13 @@
                (peek next-frontier)
                (pop next-frontier))))))
 
-
+(defn find-path [grid goal distances]
+  (let [origin (:origin distances)]
+    (loop [current goal
+           breadcrumbs {origin 0 :origin origin goal (distances goal)}]
+      (if (= current origin)
+        breadcrumbs
+        (let [current-distance (distances current)
+              neighbor (first (filter #(< (distances %) current-distance)
+                                      (:links (grid-cell grid current))))]
+          (recur neighbor (assoc breadcrumbs neighbor (distances neighbor))))))))

@@ -76,7 +76,7 @@
                        [:cells (cell-index grid cell-coord) annotation-key]
                        (value-xform value)))
            grid
-           value-map)))
+           (filter (comp coll? first) value-map))))
 
 (defn print-grid
   ([grid] (print-grid grid false))
