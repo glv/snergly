@@ -74,6 +74,43 @@
                neighbor
                (if neighbor-new? (dec unvisited) unvisited))))))
 
+(defn wilsons-loop-erased-walk [grid start-coord unvisited]
+  (let [unvisited-set (into #{} unvisited)]
+    (loop [current-coord start-coord
+           path [current-coord]]
+      (if-not (contains? unvisited-set current-coord)
+        path
+        (let [next-coord (rand-nth (cell-neighbors (grid-cell grid current-coord)))
+              position (.indexOf path next-coord)]
+          (recur next-coord
+                 (if (neg? position)
+                   (conj path next-coord)
+                   (subvec path 0 (inc position)))))))))
+
+(defn wilsons-carve-passage [grid path unvisited]
+  (loop [grid grid
+         unvisited unvisited
+         [[coord1 coord2] & pairs] (partition 2 1 path)]
+    (let [new-grid (link-cells grid (grid-cell grid coord1) coord2)
+          new-unvisited (remove (partial = coord1) unvisited)]
+      (if (empty? pairs)
+        [new-grid new-unvisited]
+        (recur new-grid
+               new-unvisited
+               pairs)))))
+
+(defn maze-wilsons [grid]
+  (loop [grid grid
+         unvisited (rest (shuffle (grid-coords grid)))
+         coord (rand-nth unvisited)]
+    (let [path (wilsons-loop-erased-walk grid coord unvisited)
+          [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited)]
+      (if (empty? new-unvisited)
+        (assoc new-grid :algorithm-name "wilsons")
+        (recur new-grid
+               new-unvisited
+               (rand-nth new-unvisited))))))
+
 (defn find-distances [grid start]
   (loop [distances {start 0 :origin start}
          current start
