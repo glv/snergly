@@ -28,6 +28,17 @@
    :cells          (into [] (for [row (range rows) column (range columns)]
                               (make-cell row column rows columns)))})
 
+;; This code also makes frequent use of "distance" maps, which are
+;; maps from [row column] vectors to integer distances.  In addition
+;; to keys for some of the cells in a grid, distance maps also have
+;; several keyword keys:
+;;
+;; * :origin - the coordinates of the origin from which the distances
+;;             are measured
+;; * :max-coord - the coordinates of the cell that is the maximum
+;;             distance from the origin
+;; * :max - the distance associated with :max-coord
+
 (defn cell-index
   ([grid [row column]] (cell-index grid row column))
   ([grid row column] (+ (* row (:columns grid)) column)))

@@ -88,5 +88,3 @@
               neighbor (first (filter #(< (distances %) current-distance)
                                       (:links (grid-cell grid current))))]
           (recur neighbor (assoc breadcrumbs neighbor (distances neighbor))))))))
-
-(defn find-longest-path [grid])
