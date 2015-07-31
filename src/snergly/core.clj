@@ -12,7 +12,8 @@
   #{"binary-tree"
     "sidewinder"
     "aldous-broder"
-    "wilsons"})
+    "wilsons"
+    "hunt-and-kill"})
 
 (defn parse-grid-size [spec]
   (condp re-matches spec

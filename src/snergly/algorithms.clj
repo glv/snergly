@@ -111,6 +111,34 @@
                new-unvisited
                (rand-nth new-unvisited))))))
 
+(defn hunt-and-kill-start-new-walk [grid]
+  (loop [[current-coord & other-coords] (grid-coords grid)]
+    (let [current-cell (grid-cell grid current-coord)
+          visited-neighbors (remove #(empty? (:links (grid-cell grid %))) (cell-neighbors current-cell))]
+      (cond
+        (and (empty? (:links current-cell))
+             (not (empty? visited-neighbors))) [(link-cells grid current-cell (rand-nth visited-neighbors)) current-coord]
+        (empty? other-coords) [grid nil]
+        :else (recur other-coords)))))
+
+(defn hunt-and-kill-step [grid current-coord]
+  (let [current-cell (grid-cell grid current-coord)
+        unvisited-neighbors (filter #(empty? (:links (grid-cell grid %)))
+                                    (cell-neighbors current-cell))]
+    (if (empty? unvisited-neighbors)
+      (hunt-and-kill-start-new-walk grid)
+      (let [neighbor (rand-nth unvisited-neighbors)]
+        [(link-cells grid current-cell neighbor)
+         neighbor]))))
+
+(defn maze-hunt-and-kill [grid]
+  (loop [grid grid
+         current-coord (random-coord grid)]
+    (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
+      (if-not next-coord
+        (assoc new-grid :algorithm-name "hunt-and-kill")
+        (recur new-grid next-coord)))))
+
 (defn find-distances [grid start]
   (loop [distances {start 0 :origin start}
          current start
