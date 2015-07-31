@@ -10,7 +10,8 @@
 
 (def algorithms
   #{"binary-tree"
-    "sidewinder"})
+    "sidewinder"
+    "aldous-broder"})
 
 (defn parse-grid-size [spec]
   (condp re-matches spec

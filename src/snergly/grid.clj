@@ -48,10 +48,10 @@
   ([grid row column]
    ((:cells grid) (cell-index grid row column))))
 
-(defn random-cell [{:keys [rows columns] :as grid}]
+(defn random-coord [{:keys [rows columns] :as grid}]
   (let [row (rand-int rows)
         column (rand-int columns)]
-    (grid-cell grid row column)))
+    [row column]))
 
 (defn grid-size [{:keys [rows columns]}]
   (* rows columns))

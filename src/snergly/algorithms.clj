@@ -59,6 +59,21 @@
                coords
                (conj processed-run (first coords)))))))
 
+(defn maze-aldous-broder [grid]
+  (loop [grid grid
+         current (random-coord grid)
+         unvisited (dec (grid-size grid))]
+    (let [cell (grid-cell grid current)
+          neighbor (rand-nth (cell-neighbors cell))
+          neighbor-new? (empty? (:links (grid-cell grid neighbor)))]
+      (if (= unvisited 0)
+        (assoc grid :algorithm-name "aldous-broder")
+        (recur (if neighbor-new?
+                 (link-cells grid cell neighbor)
+                 grid)
+               neighbor
+               (if neighbor-new? (dec unvisited) unvisited))))))
+
 (defn find-distances [grid start]
   (loop [distances {start 0 :origin start}
          current start
