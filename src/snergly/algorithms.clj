@@ -65,7 +65,7 @@
          frontier (PersistentQueue/EMPTY)]
     (let [cell (grid-cell grid current)
           current-distance (distances current)
-          links (filter #(not (contains? distances %)) (:links cell))
+          links (remove #(contains? distances %) (:links cell))
           next-frontier (apply conj frontier links)]
       (if (empty? next-frontier)
         (assoc distances :max current-distance :max-coord current)
