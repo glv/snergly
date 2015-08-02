@@ -65,6 +65,10 @@
   (for [row (range rows) column (range columns)]
     [row column]))
 
+(defn grid-deadends [grid]
+  (filter #(= 1 (count (:links %)))
+          (map #(grid-cell grid %) (grid-coords grid))))
+
 (defn link-cells [{cells :cells :as grid}
                   {cell-coord :coord cell-links :links :as cell} neighbor-coord]
   (let [neighbor (grid-cell grid neighbor-coord)

@@ -139,6 +139,9 @@
         (assoc new-grid :algorithm-name "hunt-and-kill")
         (recur new-grid next-coord)))))
 
+(defn maze-recursive-backtrack [grid]
+  )
+
 (defn find-distances [grid start]
   (loop [distances {start 0 :origin start}
          current start
