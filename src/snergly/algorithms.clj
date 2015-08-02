@@ -117,7 +117,7 @@
           visited-neighbors (remove #(empty? (:links (grid-cell grid %))) (cell-neighbors current-cell))]
       (cond
         (and (empty? (:links current-cell))
-             (not (empty? visited-neighbors))) [(link-cells grid current-cell (rand-nth visited-neighbors)) current-coord]
+             (not-empty visited-neighbors)) [(link-cells grid current-cell (rand-nth visited-neighbors)) current-coord]
         (empty? other-coords) [grid nil]
         :else (recur other-coords)))))
 
