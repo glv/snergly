@@ -1,5 +1,6 @@
 (ns ^:figwheel-always snergly.core
-    (:require))
+    (:require [snergly.algorithms :as alg]
+              [snergly.grid :as grid]))
 
 (enable-console-print!)
 
