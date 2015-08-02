@@ -3,7 +3,8 @@
   (:require [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]
             [snergly.algorithms :refer :all]
-            [snergly.grid :as grid])
+            [snergly.grid :as grid]
+            [snergly.image :as image])
   (:import [javax.imageio ImageIO]
            [java.io File]
            [java.awt Color]))
@@ -106,7 +107,7 @@
   (re-find #"(?<=\.)[^.]+$" filename))
 
 (defn write-grid-to-image-file [grid ^String filename cell-size]
-  (let [image (grid/image-grid grid cell-size)
+  (let [image (image/image-grid grid cell-size)
         format (file-extension filename)]
     (ImageIO/write image format (File. filename))))
 
