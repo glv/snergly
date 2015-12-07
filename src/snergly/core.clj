@@ -92,8 +92,8 @@
       (let [maze (algorithm grid)
             analysis (analyze maze)]
         (grid/grid-annotate-cells maze
-                                  :label (grid/xform-values #(Integer/toString % 36) analysis)
-                                  :color (grid/xform-values #(color-cell (:max analysis) %) analysis))))))
+                                  {:label (grid/xform-values #(Integer/toString % 36) analysis)
+                                   :color (grid/xform-values #(color-cell (:max analysis) %) analysis)})))))
 
 (defn run-and-render [algorithm grid-size render-fn]
   (render-fn (algorithm (apply grid/make-grid grid-size))))

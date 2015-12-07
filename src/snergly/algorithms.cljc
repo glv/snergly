@@ -1,6 +1,7 @@
 (ns snergly.algorithms
   #?(:clj (:import  [clojure.lang PersistentQueue]))
-  (:require [snergly.grid :as g]))
+  (:require [schema.core :as s :include-macros true]
+            [snergly.grid :as g]))
 
 ;; Naming conventions:
 ;;
@@ -22,7 +23,7 @@
       grid
       (g/link-cells grid cell (rand-nth neighbors)))))
 
-(defn maze-binary-tree [grid]
+(s/defn maze-binary-tree :- g/Grid [grid :- g/Grid]
   (assoc (reduce binary-tree-step grid (g/grid-coords grid))
     :algorithm-name "binary-tree"))
 
@@ -48,7 +49,7 @@
                    (g/link-cells grid cell (:east cell)))]
     [new-grid (if end-run? [] run)]))
 
-(defn maze-sidewinder [grid]
+(s/defn maze-sidewinder :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          [coord & coords] (g/grid-coords grid)
          current-run [coord]]
@@ -59,7 +60,7 @@
                coords
                (conj processed-run (first coords)))))))
 
-(defn maze-aldous-broder [grid]
+(s/defn maze-aldous-broder :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          current (g/random-coord grid)
          unvisited (dec (g/grid-size grid))]
@@ -99,7 +100,7 @@
                new-unvisited
                pairs)))))
 
-(defn maze-wilsons [grid]
+(s/defn maze-wilsons :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          unvisited (rest (shuffle (g/grid-coords grid)))
          coord (rand-nth unvisited)]
@@ -131,7 +132,7 @@
         [(g/link-cells grid current-cell neighbor)
          neighbor]))))
 
-(defn maze-hunt-and-kill [grid]
+(s/defn maze-hunt-and-kill :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          current-coord (g/random-coord grid)]
     (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
@@ -139,10 +140,12 @@
         (assoc new-grid :algorithm-name "hunt-and-kill")
         (recur new-grid next-coord)))))
 
-(defn maze-recursive-backtrack [grid]
+(s/defn maze-recursive-backtrack :- g/Grid [grid :- g/Grid]
   )
 
-(defn find-distances [grid start]
+(s/defn find-distances :- g/Distances
+  [grid :- g/Grid
+   start :- g/CellPosition]
   (loop [distances {start 0 :origin start}
          current start
          frontier #?(:clj PersistentQueue/EMPTY
@@ -160,7 +163,10 @@
                (peek next-frontier)
                (pop next-frontier))))))
 
-(defn find-path [grid goal distances]
+(s/defn find-path :- g/Distances
+  [grid :- g/Grid
+   goal :- g/CellPosition
+   distances :- g/Distances]
   (let [origin (:origin distances)]
     (loop [current goal
            breadcrumbs {origin 0 :origin origin

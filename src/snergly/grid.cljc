@@ -1,6 +1,43 @@
-(ns snergly.grid)
+(ns snergly.grid
+  (:require [schema.core :as s :include-macros true]))
 
-(defn make-cell
+(def NonNegativeInt
+  "Schema for cell coordinates and sizes"
+  (s/constrained s/Int (comp not neg?) "non-negative integer"))
+
+(def CellPosition
+  "Schema for cell [row col] coordinates"
+  (s/pair NonNegativeInt "row" NonNegativeInt "column"))
+
+(def Cell
+  "Schema for maze cells"
+  {:type (s/eq :Cell)
+   :coord CellPosition
+   :north (s/maybe CellPosition)
+   :south (s/maybe CellPosition)
+   :east (s/maybe CellPosition)
+   :west (s/maybe CellPosition)
+   :links #{CellPosition}
+   s/Keyword s/Any ; for annotations: distances, colors, labels, etc.
+   })
+
+(def Grid
+  "Schema for maze grid"
+  {:type (s/eq :Grid)
+   :algorithm-name s/Str
+   :rows NonNegativeInt
+   :columns NonNegativeInt
+   :cells [Cell]})
+
+(def Distances
+  "Schema for a distance map"
+  {:origin CellPosition ; the cell distances are relative to
+   :max-coord CellPosition ; the farthest cell from :origin
+   :max NonNegativeInt ; the distance of :max-coord from :origin
+   CellPosition NonNegativeInt ; the distance from :origin to CellPosition
+   })
+
+(s/defn make-cell :- Cell
   [row column rows columns]
   {:type  :Cell
    :coord [row column]
@@ -10,12 +47,13 @@
    :west  (when (> column 0) [row (dec column)])
    :links #{}})
 
-(defn cell-neighbors
-  ([cell] (cell-neighbors cell [:north :south :east :west]))
-  ([cell directions]
+(s/defn cell-neighbors :- [CellPosition]
+  ([cell] (cell-neighbors cell [:north :south :east]))
+  ([cell :- Cell
+    directions :- [(s/enum :north :south :east :west)]]
    (filter identity (map cell directions))))
 
-(defn make-grid
+(s/defn make-grid :- Grid
   "Creates and returns a new grid with the specified row and column sizes."
   [rows columns]
   {:type           :Grid
@@ -26,49 +64,46 @@
    :cells          (into [] (for [row (range rows) column (range columns)]
                               (make-cell row column rows columns)))})
 
-;; This code also makes frequent use of "distance" maps, which are
-;; maps from [row column] vectors to integer distances.  In addition
-;; to keys for some of the cells in a grid, distance maps also have
-;; several keyword keys:
-;;
-;; * :origin - the coordinates of the origin from which the distances
-;;             are measured
-;; * :max-coord - the coordinates of the cell that is the maximum
-;;             distance from the origin
-;; * :max - the distance associated with :max-coord
-
-(defn cell-index
+(s/defn cell-index :- NonNegativeInt
   ([grid [row column]] (cell-index grid row column))
   ([grid row column] (+ (* row (:columns grid)) column)))
 
-(defn grid-cell
+(s/defn grid-cell :- Cell
   ([grid [row column]] (grid-cell grid row column))
   ([grid row column]
    ((:cells grid) (cell-index grid row column))))
 
-(defn random-coord [{:keys [rows columns] :as grid}]
+(s/defn random-coord :- CellPosition
+  [{:keys [rows columns] :as grid}]
   (let [row (rand-int rows)
         column (rand-int columns)]
     [row column]))
 
-(defn grid-size [{:keys [rows columns]}]
+(s/defn grid-size :- NonNegativeInt
+  [{:keys [rows columns]}]
   (* rows columns))
 
-(defn grid-row-coords [{:keys [rows columns]}]
+(s/defn grid-row-coords :- [[CellPosition]]
+  [{:keys [rows columns]}]
+  "Grid cell coordinates, batched into rows."
   (for [row (range rows)]
     (for [column (range columns)]
       [row column])))
 
-(defn grid-coords [{:keys [rows columns]}]
+(s/defn grid-coords :- [CellPosition]
+  [{:keys [rows columns]}]
   (for [row (range rows) column (range columns)]
     [row column]))
 
-(defn grid-deadends [grid]
+(s/defn grid-deadends :- [Cell]
+  [grid]
   (filter #(= 1 (count (:links %)))
           (map #(grid-cell grid %) (grid-coords grid))))
 
-(defn link-cells [{cells :cells :as grid}
-                  {cell-coord :coord cell-links :links :as cell} neighbor-coord]
+(s/defn link-cells :- Grid
+  [{cells :cells :as grid} :- Grid
+   {cell-coord :coord cell-links :links :as cell} :- Cell
+   neighbor-coord :- CellPosition]
   (let [neighbor (grid-cell grid neighbor-coord)
         neighbor-links (:links neighbor)]
     (assoc grid :cells
@@ -80,14 +115,18 @@
 (defn linked? [cell other-cell-coord]
   (contains? (:links cell) other-cell-coord))
 
-(defn xform-values [value-xform value-map]
+(s/defn xform-values :- Distances
+  [value-xform
+   value-map :- Distances]
   "Returns a version of value-map with values transformed by value-xform."
   (reduce-kv (fn [m k v] (if (coll? k) (assoc m k (value-xform v)) m))
              {}
              value-map))
 
-(defn grid-annotate-cells [grid & label-specs]
-  (let [specs (partition 2 label-specs)
+(s/defn grid-annotate-cells :- Grid
+  [grid :- Grid
+   label-specs :- {s/Keyword Distances}]
+  (let [specs (seq label-specs)
         get-annotations (fn [cell-coord [label value-map]] (vector label (value-map cell-coord)))
         assoc-cell (fn [cell cell-coord]
                      (apply assoc cell (mapcat (partial get-annotations cell-coord) specs)))

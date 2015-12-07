@@ -14,12 +14,9 @@ I already see enough of the same kind of complexity to deal with that
 I think this will help me with some of the struggles I'm having with
 [Cló][clo].
 
-But I'd also like to go farther.  In the book, Buck renders the mazes
-using a PNG-generation library, but I think there would be value in
-building dynamic displays that show the maze generation algorithms in
+This is also a nice excuse for me to play with ClojureScript and Om,
+to build dynamic displays that show the maze generation algorithms in
 action, animating the flow of the algorithms as they process mazes.
-That kind of display would be a nice excuse for me to play with 
-ClojureScript and perhaps Om.
 
 [clo]: https://www.youtube.com/watch?v=824yVKUPFjU
 

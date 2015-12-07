@@ -1,6 +1,9 @@
 (ns snergly.grid-test
   (:require [clojure.test :refer :all]
+            [schema.test]
             [snergly.grid :refer :all]))
+
+(use-fixtures :once schema.test/validate-schemas)
 
 (deftest t-make-cell
   (testing "middle cell"
@@ -33,6 +36,11 @@
     (let [cell (make-cell 3 0 10 15)]
       (is (= [3 0] (:coord cell)))
       (is (nil? (:west cell))))))
+
+(deftest t-cell-neighbors
+  (let [cell (make-cell 1 0 2 3)]
+    (is (= #{[0 0] [1 1]} (set (cell-neighbors cell))))
+    (is (= [[1 1]] (cell-neighbors cell [:south :east :west])))))
 
 (deftest t-make-grid
   (let [grid (make-grid 2 3)]
@@ -81,3 +89,23 @@
                                   [2 3])]
       (is (contains? (:links (grid-cell linked-grid 1 3)) [2 3]))
       (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3])))))
+
+(deftest t-grid-annotate-cells
+  (let [grid3x2 (make-grid 3 2)
+        labels {:origin [1 1]
+                :max-coord [0 0]
+                :max 2
+                [0 0] 2
+                [0 1] 1
+                [1 0] 1
+                [1 1] 0
+                [2 0] 2
+                [2 1] 1}
+        annotated (grid-annotate-cells grid3x2 {:distance labels})]
+    (are [pos dist] (= dist (:distance (grid-cell annotated pos)))
+                    [0 0] 2
+                    [0 1] 1
+                    [1 0] 1
+                    [1 1] 0
+                    [2 0] 2
+                    [2 1] 1)))
