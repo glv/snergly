@@ -47,6 +47,22 @@
              (= (:east cell) [row (inc col)])
              (nil? (:east cell)))))))
 
+(defspec cell-neighbors-returns-all-neighbors
+  100
+  (prop/for-all [[rows row] gen-dimen-and-coord
+                 [cols col] gen-dimen-and-coord]
+    (let [cell (make-cell row col rows cols)
+          neighbors (into #{} (cell-neighbors cell))
+          neighbor-test (fn [tf r c]
+                          (= tf (contains? neighbors [r c])))
+          is-neighbor (fn [r c]
+                        (contains? neighbors [r c]))
+          isnt-neighbor (fn [r c] (not (is-neighbor r c)))]
+      (and (neighbor-test (> row 0) (dec row) col)
+           (neighbor-test (< row (dec rows)) (inc row) col)
+           (neighbor-test (> col 0) row (dec col))
+           (neighbor-test (< col (dec cols)) row (inc col))))))
+
 (defspec grids-are-well-formed
   30
   (prop/for-all [rows gen/s-pos-int

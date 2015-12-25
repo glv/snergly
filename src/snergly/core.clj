@@ -4,17 +4,10 @@
             [clojure.tools.cli :refer [parse-opts]]
             [snergly.algorithms :refer :all]
             [snergly.grid :as grid]
-            [snergly.image :as image])
+            [snergly.image :as image]
+            [snergly.util :as util])
   (:import [javax.imageio ImageIO]
-           [java.io File]
-           [java.awt Color]))
-
-(def algorithms
-  #{"binary-tree"
-    "sidewinder"
-    "aldous-broder"
-    "wilsons"
-    "hunt-and-kill"})
+           [java.io File]))
 
 (defn parse-grid-size [spec]
   (condp re-matches spec
@@ -36,7 +29,7 @@
         options-summary
         ""
         "Algorithms:"
-        (string/join \newline (map #(str "  " %) algorithms))
+        (string/join \newline (map #(str "  " %) (sort algorithms)))
         "  all"]
        (string/join \newline)))
 
@@ -67,33 +60,6 @@
                  (let [in-range #(< 1 % 10000)]
                    (and (in-range rows)
                         (in-range columns)))) "Grid dimensions must be numbers between 1 and 10,000"]]])
-
-(defn color-cell [max-distance distance]
-  (let [intensity (/ (float (- max-distance distance)) max-distance)
-        dark (Math/round (* 255 intensity))
-        bright (Math/round (+ 128 (* 127 intensity)))]
-    (Color. dark bright dark)))
-
-(defn alg-fn [name options]
-  (let [algorithm (ns-resolve 'snergly.algorithms (symbol (str "maze-" name)))
-        analyze-distances (fn [maze] (find-distances maze (:distances options)))
-        analyze-path (fn [maze] (find-path maze (:path-to options)
-                                           (analyze-distances maze)))
-        analyze-longest-path (fn [maze]
-                               (let [distances (find-distances maze [0 0])
-                                     distances-from-farthest (find-distances maze (:max-coord distances))]
-                                 (find-path maze (:max-coord distances-from-farthest) distances-from-farthest)))
-        analyze (cond
-                  (:longest options) analyze-longest-path
-                  (:path-to options) analyze-path
-                  (:distances options) analyze-distances
-                  :else (fn [_] {}))]
-    (fn [grid]
-      (let [maze (algorithm grid)
-            analysis (analyze maze)]
-        (grid/grid-annotate-cells maze
-                                  {:label (grid/xform-values #(Integer/toString % 36) analysis)
-                                   :color (grid/xform-values #(color-cell (:max analysis) %) analysis)})))))
 
 (defn run-and-render [algorithm grid-size render-fn]
   (render-fn (algorithm (apply grid/make-grid grid-size))))
@@ -128,9 +94,9 @@
                       write-grid-to-terminal)]
       (cond
         (contains? algorithms algorithm-name)
-        (run-and-render (alg-fn algorithm-name options) (:size options) render-fn)
+        (run-and-render (algorithm-fn algorithm-name options) (:size options) render-fn)
         (= "all" algorithm-name)
         (doseq [algorithm-name algorithms]
-          (run-and-render (alg-fn algorithm-name options) (:size options) render-fn))
+          (run-and-render (algorithm-fn algorithm-name options) (:size options) render-fn))
         :else
         (println (str "not running unknown algorithm " algorithm-name))))))
