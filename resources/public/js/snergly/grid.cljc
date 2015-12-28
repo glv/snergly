@@ -28,7 +28,8 @@
    :algorithm-name s/Str
    :rows NonNegativeInt
    :columns NonNegativeInt
-   :cells [Cell]})
+   :cells [Cell]
+   :changed-cells (s/maybe #{CellPosition})})
 
 (def Distances
   "Schema for a distance map"
@@ -63,7 +64,8 @@
    :rows           rows
    :columns        columns
    :cells          (into [] (for [row (range rows) column (range columns)]
-                              (make-cell row column rows columns)))})
+                              (make-cell row column rows columns)))
+   :changed-cells  nil})
 
 (s/defn cell-index :- NonNegativeInt
   ([grid [row column]] (cell-index grid row column))
@@ -101,8 +103,19 @@
   (filter #(= 1 (count (:links %)))
           (map #(grid-cell grid %) (grid-coords grid))))
 
+(s/defn begin-step :- Grid
+  [grid :- Grid]
+  (assoc grid :changed-cells #{}))
+
+(s/defn new? [grid :- Grid]
+  (nil? (:changed-cells grid)))
+
+(s/defn changed? [grid :- Grid]
+  (or (new? grid)
+      (not-empty (:changed-cells grid))))
+
 (s/defn link-cells :- Grid
-  [{cells :cells :as grid} :- Grid
+  [{:keys [cells changed-cells] :as grid} :- Grid
    {cell-coord :coord cell-links :links :as cell} :- Cell
    neighbor-coord :- CellPosition]
   (let [neighbor (grid-cell grid neighbor-coord)
@@ -111,7 +124,8 @@
                 (assoc cells (cell-index grid cell-coord)
                              (assoc cell :links (conj cell-links neighbor-coord))
                              (cell-index grid neighbor-coord)
-                             (assoc neighbor :links (conj neighbor-links cell-coord))))))
+                             (assoc neighbor :links (conj neighbor-links cell-coord)))
+                :changed-cells (conj changed-cells cell-coord neighbor-coord))))
 
 (defn linked? [cell other-cell-coord]
   (contains? (:links cell) other-cell-coord))

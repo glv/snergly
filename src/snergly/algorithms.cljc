@@ -1,6 +1,9 @@
 (ns snergly.algorithms
   #?(:clj (:import  [clojure.lang PersistentQueue]))
-  (:require [schema.core :as s :include-macros true]
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
+  (:require #?(:clj [clojure.core.async :as async :refer [go go-loop]]
+               :cljs [cljs.core.async :as async])
+            [schema.core :as s :include-macros true]
             [snergly.grid :as g]
             [snergly.util :as util]))
 
@@ -42,9 +45,18 @@
       grid
       (g/link-cells grid cell (rand-nth neighbors)))))
 
-(s/defn maze-binary-tree :- g/Grid [grid :- g/Grid]
+(s/defn maze-binary-tree-sync :- g/Grid [grid :- g/Grid]
   (assoc (reduce binary-tree-step grid (g/grid-coords grid))
     :algorithm-name "binary-tree"))
+
+(s/defn maze-binary-tree [grid :- g/Grid result-chan report-partial-steps?]
+  (go
+    (let [step-and-report (fn [g c]
+                            (when (and report-partial-steps? (g/changed? g))
+                              (go (async/>! result-chan g)))
+                            (binary-tree-step (g/begin-step g) c))
+          grid (assoc grid :algorithm-name "binary-tree")]
+      (async/>! result-chan (reduce step-and-report grid (g/grid-coords grid))))))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (:east cell))
@@ -68,7 +80,7 @@
                    (g/link-cells grid cell (:east cell)))]
     [new-grid (if end-run? [] run)]))
 
-(s/defn maze-sidewinder :- g/Grid [grid :- g/Grid]
+(s/defn maze-sidewinder-sync :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          [coord & coords] (g/grid-coords grid)
          current-run [coord]]
@@ -79,7 +91,20 @@
                coords
                (conj processed-run (first coords)))))))
 
-(s/defn maze-aldous-broder :- g/Grid [grid :- g/Grid]
+(s/defn maze-sidewinder [grid :- g/Grid result-chan report-partial-steps?]
+  (go-loop [grid (assoc grid :algorithm-name "sidewinder")
+            [coord & coords] (g/grid-coords grid)
+            current-run [coord]]
+           (when (and report-partial-steps? (g/changed? grid))
+             (async/>! result-chan grid))
+    (let [[new-grid processed-run] (sidewinder-step (g/begin-step grid) coord current-run)]
+      (if (empty? coords)
+        (async/>! result-chan new-grid)
+        (recur new-grid
+               coords
+               (conj processed-run (first coords)))))))
+
+(s/defn maze-aldous-broder-sync :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          current (g/random-coord grid)
          unvisited (dec (g/grid-size grid))]
@@ -89,8 +114,27 @@
       (if (= unvisited 0)
         (assoc grid :algorithm-name "aldous-broder")
         (recur (if neighbor-new?
-                 (g/link-cells grid cell neighbor)
+                 (g/link-cells (g/begin-step grid) cell neighbor)
                  grid)
+               neighbor
+               (if neighbor-new? (dec unvisited) unvisited))))))
+
+(s/defn maze-aldous-broder [grid :- g/Grid result-chan report-partial-steps?]
+  (go-loop [grid (assoc grid :algorithm-name "aldous-broder")
+            current (g/random-coord grid)
+            unvisited (dec (g/grid-size grid))]
+           (when (and report-partial-steps? (g/changed? grid))
+             (async/>! result-chan grid))
+    (let [cell (g/grid-cell grid current)
+          neighbor (rand-nth (g/cell-neighbors cell))
+          neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))]
+      (if (= unvisited 0)
+        (do
+          (async/>! result-chan grid)
+          (async/close! result-chan))
+        (recur (if neighbor-new?
+                 (g/link-cells (g/begin-step grid) cell neighbor)
+                 (g/begin-step grid))
                neighbor
                (if neighbor-new? (dec unvisited) unvisited))))))
 
@@ -107,11 +151,14 @@
                    (conj path next-coord)
                    (subvec path 0 (inc position)))))))))
 
-(defn wilsons-carve-passage [grid path unvisited]
+(defn wilsons-carve-passage [grid path unvisited result-chan report-partial-steps?]
   (loop [grid grid
          unvisited unvisited
          [[coord1 coord2] & pairs] (partition 2 1 path)]
-    (let [new-grid (g/link-cells grid (g/grid-cell grid coord1) coord2)
+    (go
+      (when (and report-partial-steps? (g/changed? grid))
+        (async/>! result-chan grid)))
+    (let [new-grid (g/link-cells (g/begin-step grid) (g/grid-cell grid coord1) coord2)
           new-unvisited (remove (partial = coord1) unvisited)]
       (if (empty? pairs)
         [new-grid new-unvisited]
@@ -119,17 +166,33 @@
                new-unvisited
                pairs)))))
 
-(s/defn maze-wilsons :- g/Grid [grid :- g/Grid]
+(s/defn maze-wilsons-sync :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          unvisited (rest (shuffle (g/grid-coords grid)))
          coord (rand-nth unvisited)]
     (let [path (wilsons-loop-erased-walk grid coord unvisited)
-          [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited)]
+          [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited nil false)]
       (if (empty? new-unvisited)
         (assoc new-grid :algorithm-name "wilsons")
         (recur new-grid
                new-unvisited
                (rand-nth new-unvisited))))))
+
+(s/defn maze-wilsons [grid :- g/Grid result-chan report-partial-steps?]
+  (go-loop [grid (assoc grid :algorithm-name "wilsons")
+            unvisited (rest (shuffle (g/grid-coords grid)))
+            coord (rand-nth unvisited)]
+           (let [path (wilsons-loop-erased-walk grid coord unvisited)
+                 ;; because this algorithm first finds a path and then carves
+                 ;; it out as separate steps, it would be good to have
+                 ;; wilsons-loop-erased-walk also animate the path-finding,
+                 ;; perhaps by annotating the path cells with a color.
+                 [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited result-chan report-partial-steps?)]
+             (if (empty? new-unvisited)
+               (async/>! result-chan new-grid)
+               (recur new-grid
+                      new-unvisited
+                      (rand-nth new-unvisited))))))
 
 (defn hunt-and-kill-start-new-walk [grid]
   (loop [[current-coord & other-coords] (g/grid-coords grid)]
@@ -151,7 +214,7 @@
         [(g/link-cells grid current-cell neighbor)
          neighbor]))))
 
-(s/defn maze-hunt-and-kill :- g/Grid [grid :- g/Grid]
+(s/defn maze-hunt-and-kill-sync :- g/Grid [grid :- g/Grid]
   (loop [grid grid
          current-coord (g/random-coord grid)]
     (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
@@ -159,7 +222,18 @@
         (assoc new-grid :algorithm-name "hunt-and-kill")
         (recur new-grid next-coord)))))
 
-(s/defn maze-recursive-backtrack :- g/Grid [grid :- g/Grid]
+(s/defn maze-hunt-and-kill [grid :- g/Grid result-chan report-partial-steps?]
+  (go-loop [grid (assoc grid :algorithm-name "hunt-and-kill")
+            current-coord (g/random-coord grid)]
+    (go
+      (when (and report-partial-steps? (g/changed? grid))
+        (async/>! result-chan grid)))
+    (let [[new-grid next-coord] (hunt-and-kill-step (g/begin-step grid) current-coord)]
+      (if-not next-coord
+        (async/>! result-chan new-grid)
+        (recur new-grid next-coord)))))
+
+(s/defn maze-recursive-backtrack :- g/Grid [grid :- g/Grid result-chan report-partial-steps?]
   )
 
 (s/defn find-distances :- g/Distances
@@ -208,8 +282,14 @@
    "wilsons" maze-wilsons
    "hunt-and-kill" maze-hunt-and-kill})
 
+(defn synchronous-algorithm [alg-name]
+  (fn [grid]
+    (let [result-chan (async/chan)]
+      ((algorithm-functions alg-name) grid result-chan false)
+      (async/<!! result-chan))))
+
 (defn algorithm-fn [name options]
-  (let [algorithm (algorithm-functions name)
+  (let [algorithm (synchronous-algorithm name)
         analyze-distances (fn [maze] (find-distances maze (:distances options)))
         analyze-path (fn [maze] (find-path maze (:path-to options)
                                            (analyze-distances maze)))

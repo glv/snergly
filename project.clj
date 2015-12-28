@@ -7,6 +7,7 @@
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/clojurescript "1.7.170"]
                  [org.clojure/tools.cli "0.3.3"]
+                 [org.clojure/core.async "0.2.374"]
                  ;[sablono "0.4.0"]
                  [org.omcljs/om "1.0.0-alpha24"] ; newest version is 1.0.0-alpha24
                  [org.clojure/test.check "0.9.0"] ; just to download

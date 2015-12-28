@@ -82,13 +82,19 @@
     (is (= [2 4]
            (-> rowseq (nth 2) (nth 4))))))
 
+(deftest t-begin-step
+  (let [grid3x5 (assoc (make-grid 3 5) :changed-cells #{[0 1] [2 3]})]
+    (let [reset-grid (begin-step grid3x5)]
+      (is (empty? (:changed-cells reset-grid))))))
+
 (deftest t-link-cells
-  (let [grid3x5 (make-grid 3 5)]
+  (let [grid3x5 (assoc (make-grid 3 5) :changed-cells #{[0 1] [2 3]})]
     (let [linked-grid (link-cells grid3x5
                                   (grid-cell grid3x5 1 3)
                                   [2 3])]
       (is (contains? (:links (grid-cell linked-grid 1 3)) [2 3]))
-      (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3])))))
+      (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3]))
+      (is (= #{[0 1] [2 3] [1 3]} (:changed-cells linked-grid))))))
 
 (deftest t-grid-annotate-cells
   (let [grid3x2 (make-grid 3 2)

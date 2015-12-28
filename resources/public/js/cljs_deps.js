@@ -24,7 +24,7 @@ goog.addDependency("../schema/spec/leaf.js", ['schema.spec.leaf'], ['cljs.core',
 goog.addDependency("../schema/core.js", ['schema.core'], ['schema.spec.collection', 'cljs.core', 'schema.spec.core', 'schema.spec.variant', 'schema.spec.leaf', 'clojure.string', 'schema.utils']);
 goog.addDependency("../snergly/util.js", ['snergly.util'], ['cljs.core']);
 goog.addDependency("../snergly/grid.js", ['snergly.grid'], ['schema.core', 'cljs.core', 'snergly.util']);
-goog.addDependency("../snergly/algorithms.js", ['snergly.algorithms'], ['schema.core', 'cljs.core', 'snergly.util', 'snergly.grid']);
+goog.addDependency("../snergly/algorithms.js", ['snergly.algorithms'], ['schema.core', 'cljs.core', 'cljs.core.async', 'snergly.util', 'snergly.grid']);
 goog.addDependency("../react.inc.js", ['cljsjs.react'], []);
 goog.addDependency("../react-dom.inc.js", ['cljsjs.react.dom'], ['cljsjs.react']);
 goog.addDependency("../om/util.js", ['om.util'], ['cljs.core']);
@@ -50,5 +50,5 @@ goog.addDependency("../com/cognitect/transit.js", ['com.cognitect.transit'], ['c
 goog.addDependency("../cognitect/transit.js", ['cognitect.transit'], ['com.cognitect.transit.eq', 'cljs.core', 'com.cognitect.transit.types', 'com.cognitect.transit', 'goog.math.Long']);
 goog.addDependency("../om/transit.js", ['om.transit'], ['cljs.core', 'cognitect.transit', 'om.tempid', 'com.cognitect.transit']);
 goog.addDependency("../om/next.js", ['om.next'], ['om.next.cache', 'clojure.zip', 'om.next.impl.parser', 'goog.string', 'goog.debug.Console', 'cljs.core', 'goog.object', 'goog.log', 'om.next.protocols', 'om.tempid', 'clojure.walk', 'om.transit', 'om.util']);
-goog.addDependency("../snergly/core.js", ['snergly.core'], ['goog.dom', 'snergly.algorithms', 'cljs.core', 'om.dom', 'snergly.image', 'snergly.util', 'om.core', 'snergly.grid', 'om.next']);
+goog.addDependency("../snergly/core.js", ['snergly.core'], ['goog.dom', 'snergly.algorithms', 'cljs.core', 'om.dom', 'cljs.core.async', 'snergly.image', 'snergly.util', 'om.core', 'snergly.grid', 'om.next']);
 goog.addDependency("../figwheel/connect.js", ['figwheel.connect'], ['cljs.core', 'figwheel.client', 'figwheel.client.utils', 'snergly.core']);
