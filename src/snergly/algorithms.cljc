@@ -146,6 +146,15 @@
         path
         (let [next-coord (rand-nth (g/cell-neighbors (g/grid-cell grid current-coord)))
               position (#?(:clj .indexOf :cljs cljs-index-of) path next-coord)]
+          ;; in order to animate doing the walk in addition to actually carving
+          ;; the path, we would need to pass in result-chan and
+          ;; report-partial-steps? here, include the grid in the recur *and*
+          ;; the return value, and at this point update the color of
+          ;; current-coord and, if report-partial-steps?, put the updated grid
+          ;; onto result-chan.  (Oh, and also we'd have to have conditional code
+          ;; for setting the color in both the cljs and clj ways, and we'd
+          ;; have to update wilsons-carve-passage to erase the cell color from
+          ;; each cell as it carves the path.  Hardly seems worth it.
           (recur next-coord
                  (if (neg? position)
                    (conj path next-coord)
