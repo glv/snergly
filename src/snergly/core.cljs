@@ -16,7 +16,7 @@
 (declare reconciler)
 
 (def init-data
-  {:app/algorithms (sort algs/algorithms)
+  {:app/algorithms (sort algs/algorithm-names)
    :maze {:algorithm ""
           :rows 10
           :columns 10

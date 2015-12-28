@@ -81,8 +81,8 @@
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
     ;; Handle help and error conditions
     (cond
-      (:help options) (exit 0 (usage summary algorithms))
-      (not= (count arguments) 1) (exit 1 (usage summary algorithms))
+      (:help options) (exit 0 (usage summary algorithm-names))
+      (not= (count arguments) 1) (exit 1 (usage summary algorithm-names))
       errors (exit 1 (error-msg errors))
       (and (= (first arguments) "all")
               (:output options)) (exit 1 (error-msg ["You can only write one maze to an output file; do not use '--output' and 'all' at the same time."])))
@@ -93,10 +93,10 @@
                       #(write-grid-to-image-file % output-file (:cell-size options))
                       write-grid-to-terminal)]
       (cond
-        (contains? algorithms algorithm-name)
+        (contains? algorithm-names algorithm-name)
         (run-and-render (algorithm-fn algorithm-name options) (:size options) render-fn)
         (= "all" algorithm-name)
-        (doseq [algorithm-name algorithms]
+        (doseq [algorithm-name algorithm-names]
           (run-and-render (algorithm-fn algorithm-name options) (:size options) render-fn))
         :else
         (println (str "not running unknown algorithm " algorithm-name))))))

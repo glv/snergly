@@ -8,7 +8,7 @@
             [snergly.util :as util]))
 
 ;; When adding a new algorithm, also add it to algorithm-functions below.
-(def algorithms
+(def algorithm-names
   #{"binary-tree"
     "sidewinder"
     "aldous-broder"
