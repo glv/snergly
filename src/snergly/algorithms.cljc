@@ -255,6 +255,37 @@
       ((algorithm-functions alg-name) grid result-chan false)
       (async/<!! result-chan))))
 
+;; This is here just to demonstrate the way that core.async works differently
+;; between Clojure and ClojureScript.  I wanted to ensure that in the Clojure
+;; version I was using the go-loops in the same way as in ClojureScript when
+;; doing animation.
+;;
+;; In the current ClojureScript version, all of the algorithms work fine when
+;; not animating, just computing the final maze and rendering it.
+;;
+;; But when animating, only aldous-broder and sidewinder work properly, and
+;; those are the ones that only have a single go-loop in the algorithm.  The
+;; others use two go-loops on the same channel, and they don't animate; for
+;; some reason, they only report the finished grid.
+;;
+;; For a while, I was failing to close result-chan at the end of most
+;; algorithms, and then I got a different symptom: they would all animate just
+;; fine for small grids, but for large grids, all but aldous-broder and
+;; sidewinder would give the following error:
+;;
+;; > Uncaught Error: Assert failed: No more than 1024 pending puts are allowed
+;; >   on a single channel. Consider using a windowed buffer.
+;;
+(defn synchronous-algorithm-slow [alg-name]
+  (fn [grid]
+    (let [result-chan (async/chan)]
+      ((algorithm-functions alg-name) grid result-chan true)
+      (async/<!! (go-loop [prev-grid nil]
+                          (let [new-grid (async/<! result-chan)]
+                            (if new-grid
+                              (recur new-grid)
+                              prev-grid)))))))
+
 (defn algorithm-fn [name options]
   (let [algorithm (synchronous-algorithm name)
         analyze-distances (fn [maze] (find-distances maze (:distances options)))
