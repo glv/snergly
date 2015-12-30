@@ -45,10 +45,6 @@
       grid
       (g/link-cells grid cell (rand-nth neighbors)))))
 
-(s/defn maze-binary-tree-sync :- g/Grid [grid :- g/Grid]
-  (assoc (reduce binary-tree-step grid (g/grid-coords grid))
-    :algorithm-name "binary-tree"))
-
 (s/defn maze-binary-tree [grid :- g/Grid result-chan report-partial-steps?]
   (go
     (let [step-and-report (fn [g c]
@@ -80,17 +76,6 @@
                    (g/link-cells grid cell (:east cell)))]
     [new-grid (if end-run? [] run)]))
 
-(s/defn maze-sidewinder-sync :- g/Grid [grid :- g/Grid]
-  (loop [grid grid
-         [coord & coords] (g/grid-coords grid)
-         current-run [coord]]
-    (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
-      (if (empty? coords)
-        (assoc new-grid :algorithm-name "sidewinder")
-        (recur new-grid
-               coords
-               (conj processed-run (first coords)))))))
-
 (s/defn maze-sidewinder [grid :- g/Grid result-chan report-partial-steps?]
   (go-loop [grid (assoc grid :algorithm-name "sidewinder")
             [coord & coords] (g/grid-coords grid)
@@ -103,21 +88,6 @@
         (recur new-grid
                coords
                (conj processed-run (first coords)))))))
-
-(s/defn maze-aldous-broder-sync :- g/Grid [grid :- g/Grid]
-  (loop [grid grid
-         current (g/random-coord grid)
-         unvisited (dec (g/grid-size grid))]
-    (let [cell (g/grid-cell grid current)
-          neighbor (rand-nth (g/cell-neighbors cell))
-          neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))]
-      (if (= unvisited 0)
-        (assoc grid :algorithm-name "aldous-broder")
-        (recur (if neighbor-new?
-                 (g/link-cells (g/begin-step grid) cell neighbor)
-                 grid)
-               neighbor
-               (if neighbor-new? (dec unvisited) unvisited))))))
 
 (s/defn maze-aldous-broder [grid :- g/Grid result-chan report-partial-steps?]
   (go-loop [grid (assoc grid :algorithm-name "aldous-broder")
@@ -175,18 +145,6 @@
                new-unvisited
                pairs)))))
 
-(s/defn maze-wilsons-sync :- g/Grid [grid :- g/Grid]
-  (loop [grid grid
-         unvisited (rest (shuffle (g/grid-coords grid)))
-         coord (rand-nth unvisited)]
-    (let [path (wilsons-loop-erased-walk grid coord unvisited)
-          [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited nil false)]
-      (if (empty? new-unvisited)
-        (assoc new-grid :algorithm-name "wilsons")
-        (recur new-grid
-               new-unvisited
-               (rand-nth new-unvisited))))))
-
 (s/defn maze-wilsons [grid :- g/Grid result-chan report-partial-steps?]
   (go-loop [grid (assoc grid :algorithm-name "wilsons")
             unvisited (rest (shuffle (g/grid-coords grid)))
@@ -222,14 +180,6 @@
       (let [neighbor (rand-nth unvisited-neighbors)]
         [(g/link-cells grid current-cell neighbor)
          neighbor]))))
-
-(s/defn maze-hunt-and-kill-sync :- g/Grid [grid :- g/Grid]
-  (loop [grid grid
-         current-coord (g/random-coord grid)]
-    (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
-      (if-not next-coord
-        (assoc new-grid :algorithm-name "hunt-and-kill")
-        (recur new-grid next-coord)))))
 
 (s/defn maze-hunt-and-kill [grid :- g/Grid result-chan report-partial-steps?]
   (go-loop [grid (assoc grid :algorithm-name "hunt-and-kill")
