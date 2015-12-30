@@ -136,12 +136,11 @@
                    (subvec path 0 (inc position)))))))))
 
 (defn wilsons-carve-passage [grid path unvisited result-chan report-partial-steps?]
-  (loop [grid grid
-         unvisited unvisited
-         [[coord1 coord2] & pairs] (partition 2 1 path)]
-    (go
-      (when (and report-partial-steps? (g/changed? grid))
-        (async/>! result-chan grid)))
+  (go-loop [grid grid
+            unvisited unvisited
+            [[coord1 coord2] & pairs] (partition 2 1 path)]
+           (when (and report-partial-steps? (g/changed? grid))
+             (async/>! result-chan grid))
     (let [new-grid (g/link-cells (g/begin-step grid) (g/grid-cell grid coord1) coord2)
           new-unvisited (remove (partial = coord1) unvisited)]
       (if (empty? pairs)
@@ -159,7 +158,8 @@
                  ;; it out as separate steps, it would be good to have
                  ;; wilsons-loop-erased-walk also animate the path-finding,
                  ;; perhaps by annotating the path cells with a color.
-                 [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited result-chan report-partial-steps?)]
+                 path-chan (wilsons-carve-passage grid path unvisited result-chan report-partial-steps?)
+                 [new-grid new-unvisited] (async/<! path-chan)]
              (if (empty? new-unvisited)
                (do
                  (async/>! result-chan new-grid)
