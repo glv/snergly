@@ -33,15 +33,14 @@
         _ (println (str "algorithm: " algorithm))
         algorithm-fn (algs/algorithm-functions algorithm)]
     (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~maze-chan})])
-    (go
-      (loop []
+    (go-loop []
         (let [new-maze (async/<! maze-chan)]
              (if new-maze
                (do
-                 (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~new-maze})])
+                 (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom new-maze)})])
                  (async/<! (async/timeout 1))
                  (recur))
-               (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~nil})])))))
+               (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~nil})]))))
     (algorithm-fn (grid/make-grid rows columns) maze-chan true)))
 
 ;; -----------------------------------------------------------------------------
@@ -107,14 +106,14 @@
     (let [{:keys [grid cell-size] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid g grid cell-size)
+      (image/image-grid g @grid cell-size)
       )
     )
   (componentDidUpdate [this prev-props prev-state]
     (let [{:keys [grid cell-size] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid g grid cell-size) ;; ??? remove assoc to optimize animation once fixed.
+      (image/image-grid g @grid cell-size) ;; ??? remove assoc to optimize animation once fixed.
       )
     )
   (render [this]
