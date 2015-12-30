@@ -46,14 +46,16 @@
       (g/link-cells grid cell (rand-nth neighbors)))))
 
 (s/defn maze-binary-tree [grid :- g/Grid result-chan report-partial-steps?]
-  (go
-    (let [step-and-report (fn [g c]
-                            (when (and report-partial-steps? (g/changed? g))
-                              (go (async/>! result-chan g)))
-                            (binary-tree-step (g/begin-step g) c))
-          grid (assoc grid :algorithm-name "binary-tree")]
-      (async/>! result-chan (reduce step-and-report grid (g/grid-coords grid)))
-      (async/close! result-chan))))
+  (go-loop [grid (assoc grid :algorithm-name "binary-tree")
+            [coord & coords] (g/grid-coords grid)]
+    (if-not coord
+      (do
+        (async/>! result-chan grid)
+        (async/close! result-chan))
+      (do
+        (when (and report-partial-steps? (g/changed? grid))
+          (async/>! result-chan grid))
+        (recur (binary-tree-step (g/begin-step grid) coord) coords)))))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (:east cell))
