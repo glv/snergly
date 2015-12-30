@@ -52,7 +52,8 @@
                               (go (async/>! result-chan g)))
                             (binary-tree-step (g/begin-step g) c))
           grid (assoc grid :algorithm-name "binary-tree")]
-      (async/>! result-chan (reduce step-and-report grid (g/grid-coords grid))))))
+      (async/>! result-chan (reduce step-and-report grid (g/grid-coords grid)))
+      (async/close! result-chan))))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (:east cell))
@@ -84,7 +85,9 @@
              (async/>! result-chan grid))
     (let [[new-grid processed-run] (sidewinder-step (g/begin-step grid) coord current-run)]
       (if (empty? coords)
-        (async/>! result-chan new-grid)
+        (do
+          (async/>! result-chan new-grid)
+          (async/close! result-chan))
         (recur new-grid
                coords
                (conj processed-run (first coords)))))))
@@ -156,7 +159,9 @@
                  ;; perhaps by annotating the path cells with a color.
                  [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited result-chan report-partial-steps?)]
              (if (empty? new-unvisited)
-               (async/>! result-chan new-grid)
+               (do
+                 (async/>! result-chan new-grid)
+                 (async/close! result-chan))
                (recur new-grid
                       new-unvisited
                       (rand-nth new-unvisited))))))
@@ -189,7 +194,10 @@
         (async/>! result-chan grid)))
     (let [[new-grid next-coord] (hunt-and-kill-step (g/begin-step grid) current-coord)]
       (if-not next-coord
-        (async/>! result-chan new-grid)
+        (do
+          (async/>! result-chan new-grid)
+          (async/close! result-chan)
+          )
         (recur new-grid next-coord)))))
 
 (s/defn maze-recursive-backtrack :- g/Grid [grid :- g/Grid result-chan report-partial-steps?]
