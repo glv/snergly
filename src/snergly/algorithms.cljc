@@ -191,15 +191,13 @@
 (s/defn maze-hunt-and-kill [grid :- g/Grid result-chan report-partial-steps?]
   (go-loop [grid (assoc grid :algorithm-name "hunt-and-kill")
             current-coord (g/random-coord grid)]
-    (go
       (when (and report-partial-steps? (g/changed? grid))
-        (async/>! result-chan grid)))
+        (async/>! result-chan grid))
     (let [[new-grid next-coord] (hunt-and-kill-step (g/begin-step grid) current-coord)]
       (if-not next-coord
         (do
           (async/>! result-chan new-grid)
-          (async/close! result-chan)
-          )
+          (async/close! result-chan))
         (recur new-grid next-coord)))))
 
 (s/defn maze-recursive-backtrack :- g/Grid [grid :- g/Grid result-chan report-partial-steps?]
