@@ -13,7 +13,8 @@
     "sidewinder"
     "aldous-broder"
     "wilsons"
-    "hunt-and-kill"})
+    "hunt-and-kill"
+    "recursive-backtracker"})
 
 ;; necessary because (.indexOf) doesn't work properly in ClojureScript.
 (defn cljs-index-of [s val]
@@ -209,6 +210,34 @@
             new-grid)
           (recur new-grid next-coord))))))
 
+(defn recursive-backtracker-step [grid stack]
+  (let [grid (g/begin-step grid)
+        current-coord (first stack)
+        current-cell (g/grid-cell grid current-coord)
+        unvisited-neighbors (filter #(empty? (:links (g/grid-cell grid %)))
+                                    (g/cell-neighbors current-cell))]
+    (if (empty? unvisited-neighbors)
+      [grid (rest stack)]
+      (let [next-current (rand-nth unvisited-neighbors)]
+        [(g/link-cells grid current-cell next-current)
+         (conj stack next-current)]))))
+
+(s/defn maze-recursive-backtracker
+  ([grid :- g/Grid] (maze-recursive-backtracker grid nil))
+  ([grid :- g/Grid result-chan]
+    (go-loop [grid (assoc grid :algorithm-name "recursive-backtracker")
+              stack (list (g/random-coord grid))]
+             (when (and result-chan (g/changed? grid))
+               (println "reporting")
+               (async/>! result-chan grid))
+             (if (empty? stack)
+               (do
+                 (when result-chan (async/close! result-chan))
+                 grid)
+               (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
+                 (recur new-grid new-stack)
+                 )))))
+
 (s/defn find-distances :- g/Distances
   ([grid :- g/Grid start :- g/CellPosition] (find-distances grid start nil))
   ([grid :- g/Grid
@@ -270,7 +299,8 @@
    "sidewinder" maze-sidewinder
    "aldous-broder" maze-aldous-broder
    "wilsons" maze-wilsons
-   "hunt-and-kill" maze-hunt-and-kill})
+   "hunt-and-kill" maze-hunt-and-kill
+   "recursive-backtracker" maze-recursive-backtracker})
 
 #?(:clj
    (defn synchronous-fn [func]
