@@ -38,6 +38,12 @@
 
           :active nil}})
 
+(defn annotate-grid [maze distances]
+  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell (:max distances) %) distances)}))
+
+(defn annotate-grid-flat [maze distances]
+  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell % %) distances)}))
+
 (defn produce-analysis-async [maze {:keys [analysis start-row start-col end-row end-col] :as maze-params}]
   (println (str "analysis: " analysis))
   (if (= "distances" analysis)
@@ -49,10 +55,12 @@
                  (let [distances (async/<! intermediate-chan)]
                    (if distances
                      (do
+                       (set-maze-params! :grid (atom (annotate-grid maze distances)))
                        (async/<! (async/timeout 0))
                        (recur))
                      (let [distances (async/<! result-chan)]
-                       (set-maze-params! :active nil)
+                       (set-maze-params! :grid (atom (annotate-grid maze distances))
+                                         :active nil)
                        (async/<! (async/timeout 0)))
                      )))
         (async/timeout 0)))
@@ -66,23 +74,15 @@
         algorithm-fn (algs/algorithm-functions algorithm)
         result-chan (algorithm-fn (grid/make-grid rows columns) intermediate-chan)]
     (go-loop []
-             (let [new-maze (async/<! intermediate-chan)]
-               (if new-maze
-                 (do
-                   (set-maze-params! :grid (atom new-maze))
-                   (async/<! (async/timeout 0))
-                   (recur))
-                 (let [maze (async/<! result-chan)]
-                   (set-maze-params! :grid (atom maze)
-                                     :active nil)
-                   maze))))))
-
-(defn pull-until-empty [chan]
-  (go-loop [last-val nil]
-           (let [val (async/<! chan)]
-             (if val
-               (recur val)
-               last-val))))
+             (if-let [new-maze (async/<! intermediate-chan)]
+               (do
+                 (set-maze-params! :grid (atom new-maze))
+                 (async/<! (async/timeout 0))
+                 (recur))
+               (let [maze (async/<! result-chan)]
+                 (set-maze-params! :grid (atom maze)
+                                   :active nil)
+                 maze)))))
 
 (defn run-animation [maze-params]
   (go
