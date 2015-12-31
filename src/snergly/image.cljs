@@ -1,7 +1,5 @@
 (ns snergly.image
   (:require [snergly.grid :as g]))
-  ;(:import [java.awt Color Graphics2D]
-  ;         [java.awt.image BufferedImage])
 
 ;; File conventions:
 ;;

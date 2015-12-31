@@ -25,7 +25,7 @@
 (def Grid
   "Schema for maze grid"
   {:type (s/eq :Grid)
-   :algorithm-name s/Str
+   :algorithm-name s/Str ; algorithms should set this to indicate how the grid was generated
    :rows NonNegativeInt
    :columns NonNegativeInt
    :cells [Cell]
@@ -59,7 +59,6 @@
   "Creates and returns a new grid with the specified row and column sizes."
   [rows columns]
   {:type           :Grid
-   ; algorithms should set this to indicate how the grid was generated:
    :algorithm-name "none"
    :rows           rows
    :columns        columns

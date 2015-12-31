@@ -122,14 +122,13 @@
         (let [next-coord (rand-nth (g/cell-neighbors (g/grid-cell grid current-coord)))
               position (#?(:clj .indexOf :cljs cljs-index-of) path next-coord)]
           ;; in order to animate doing the walk in addition to actually carving
-          ;; the path, we would need to pass in result-chan and
-          ;; report-partial-steps? here, include the grid in the recur *and*
-          ;; the return value, and at this point update the color of
-          ;; current-coord and, if report-partial-steps?, put the updated grid
-          ;; onto result-chan.  (Oh, and also we'd have to have conditional code
-          ;; for setting the color in both the cljs and clj ways, and we'd
+          ;; the path, we would need to pass in result-chan here, include the
+          ;; grid in the recur *and* the return value, and at this point update
+          ;; the color of current-coord and, if result-chan, put the updated
+          ;; grid onto result-chan.  (Oh, and also we'd have to have conditional
+          ;; code for setting the color in both the cljs and clj ways, and we'd
           ;; have to update wilsons-carve-passage to erase the cell color from
-          ;; each cell as it carves the path.  Hardly seems worth it.
+          ;; each cell as it carves the path.)  Hardly seems worth it.
           (recur next-coord
                  (if (neg? position)
                    (conj path next-coord)
@@ -200,9 +199,6 @@
           new-grid)
         (recur new-grid next-coord)))))
 
-(s/defn maze-recursive-backtrack :- g/Grid [grid :- g/Grid result-chan report-partial-steps?]
-  )
-
 (s/defn find-distances :- g/Distances
   [grid :- g/Grid
    start :- g/CellPosition
@@ -256,37 +252,6 @@
 (defn synchronous-algorithm [alg-name]
   (fn [grid]
     (async/<!! ((algorithm-functions alg-name) grid nil))))
-
-;; This is here just to demonstrate the way that core.async works differently
-;; between Clojure and ClojureScript.  I wanted to ensure that in the Clojure
-;; version I was using the go-loops in the same way as in ClojureScript when
-;; doing animation.
-;;
-;; In the current ClojureScript version, all of the algorithms work fine when
-;; not animating, just computing the final maze and rendering it.
-;;
-;; But when animating, only aldous-broder and sidewinder work properly, and
-;; those are the ones that only have a single go-loop in the algorithm.  The
-;; others use two go-loops on the same channel, and they don't animate; for
-;; some reason, they only report the finished grid.
-;;
-;; For a while, I was failing to close result-chan at the end of most
-;; algorithms, and then I got a different symptom: they would all animate just
-;; fine for small grids, but for large grids, all but aldous-broder and
-;; sidewinder would give the following error:
-;;
-;; > Uncaught Error: Assert failed: No more than 1024 pending puts are allowed
-;; >   on a single channel. Consider using a windowed buffer.
-;;
-(defn synchronous-algorithm-slow [alg-name]
-  (fn [grid]
-    (let [step-chan (async/chan)
-          result-chan ((algorithm-functions alg-name) grid step-chan)]
-      (async/<!! (go-loop []
-                          (let [grid (async/<! step-chan)]
-                            (if grid
-                              (recur)
-                              (async/<! result-chan))))))))
 
 (defn algorithm-fn [name options]
   (let [algorithm (synchronous-algorithm name)

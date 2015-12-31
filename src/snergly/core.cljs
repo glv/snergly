@@ -1,10 +1,10 @@
 (ns snergly.core
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require [cljs.core.async :as async]
-            [goog.dom :as gdom]  ; dom creation and manipulation
-            [om.next :as om :refer-macros [defui]] ; om
+            [goog.dom :as gdom]
+            [om.next :as om :refer-macros [defui]]
             [om.core :as omcore]
-            [om.dom :as dom] ; layer over gdom, maybe?
+            [om.dom :as dom]
             [snergly.algorithms :as algs]
             [snergly.grid :as grid]
             [snergly.util :as util]
@@ -17,7 +17,7 @@
 
 (def init-data
   {:app/algorithms (sort algs/algorithm-names)
-   :app/analyses ["none" "distances" "path" "longest path"]
+   :app/analyses ["none" "distances"] ; "path" "longest path"
    :maze {:algorithm ""
           :rows 10
           :columns 10
@@ -38,11 +38,6 @@
 (defn produce-analysis-async [maze {:keys [analysis start-row start-col end-row end-col] :as maze-params} maze-chan]
   (println (str "analysis: " analysis))
   (go-loop []
-           ;(condp = analysis
-           ;  "distances" ()
-           ;  "path" true
-           ;  "longest path" true
-           ;  )
            (let [distances (async/<! maze-chan)]
              (println "Once through the analysis loop")
              (if-not distances
@@ -58,21 +53,15 @@
   (let [intermediate-chan (async/chan)
         _ (println (str "algorithm: " algorithm))
         algorithm-fn (algs/algorithm-functions algorithm)
-        _ (println (str "algorithm-fn: "))
         result-chan (algorithm-fn (grid/make-grid rows columns) intermediate-chan)]
-    (println (str "result-chan: " result-chan))
     (go-loop []
-             (println "in go loop")
              (let [new-maze (async/<! intermediate-chan)]
-               (print (str "new-maze "))
                (if new-maze
                  (do
-                   (println "was not nil!")
                    (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom new-maze)})])
                    (async/<! (async/timeout 1))
                    (recur))
                  (let [maze (async/<! result-chan)]
-                   (println " was nil!")
                    (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom maze)})])))))))
 
 (defn run-animation [maze-params]
@@ -80,22 +69,6 @@
     (let [maze (async/<! (produce-maze-async maze-params))
           ; maze (async/<! (produce-analysis-async maze maze-params))
           ])))
-
-  ;(let [maze-chan (async/chan)
-  ;      _ (println (str "algorithm: " algorithm))
-  ;      algorithm-fn (algs/algorithm-functions algorithm)]
-  ;  (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~maze-chan})])
-  ;  (go-loop [last-maze nil]
-  ;      (let [new-maze (async/<! maze-chan)]
-  ;           (if new-maze
-  ;             (do
-  ;               (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom new-maze)})])
-  ;               (async/<! (async/timeout 1))
-  ;               (recur new-maze))
-  ;             (do
-  ;               (async/<! (produce-analysis-async last-maze maze-params maze-chan))
-  ;               (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~nil})])))))
-  ;  (algorithm-fn (grid/make-grid rows columns) maze-chan true)))
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing
@@ -129,10 +102,7 @@
 (defmethod produce-maze-value :grid
   [_ new-value {:keys [maze] :as state}]
   (let [{:keys [algorithm rows columns grid]} maze]
-    ;(if new-value new-value grid)
-    new-value
-    ;(run algorithm rows columns)
-    ))
+    new-value))
 
 (defmethod produce-maze-value :channel
   [_ value _]
@@ -171,7 +141,7 @@
     (let [{:keys [grid cell-size] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid g @grid cell-size) ;; ??? remove assoc to optimize animation once fixed.
+      (image/image-grid g @grid cell-size)
       )
     )
   (render [this]
@@ -269,10 +239,6 @@
                             :onInput (partial modify :end-col)})))
         (dom/div
           nil
-          ;(dom/button #js {:disabled (not (ready-to-go maze))
-          ;                 :onClick  (partial modify :grid)
-          ;                 }
-          ;            "Go!")
           (dom/button #js {:disabled (not (ready-to-go maze))
                            :onClick (partial go-async maze)}
                       "Go!"))
