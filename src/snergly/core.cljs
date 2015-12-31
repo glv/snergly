@@ -23,7 +23,6 @@
           :columns 10
           :cell-size 10
           :grid nil
-          :channel nil
 
           :analysis "none"
           :start-row 0
@@ -104,10 +103,6 @@
   (let [{:keys [algorithm rows columns grid]} maze]
     new-value))
 
-(defmethod produce-maze-value :channel
-  [_ value _]
-  value)
-
 (defmethod produce-maze-value :default
   [_ form-value _]
   (js/parseInt form-value))
@@ -173,70 +168,78 @@
         nil
         (dom/div
           nil
-          (dom/span nil "Algorithm: ")
-          (dom/select #js {:value algorithm
-                           :onChange (partial modify :algorithm)}
-                      (concat [(dom/option #js {:key ""} "")]
-                              (map
-                                (fn [name]
-                                  (dom/option #js {:key name} name))
-                                algorithms))))
+          (dom/label nil
+                     "Algorithm: "
+                     (dom/select #js {:value algorithm
+                                      :onChange (partial modify :algorithm)}
+                                 (concat [(dom/option #js {:key ""} "")]
+                                         (map
+                                           (fn [name]
+                                             (dom/option #js {:key name} name))
+                                           algorithms)))))
         (dom/div
           nil
-          (dom/span nil "Rows: ")
-          (dom/input #js {:type "number"
-                          :value rows
-                          :min 2
-                          :max 99
-                          :style #js {:width "30px"}
-                          :onInput (partial modify :rows)})
-          (dom/span nil "Columns: ")
-          (dom/input #js {:type "number"
-                          :value columns
-                          :min 2
-                          :max 99
-                          :style #js {:width "30px"}
-                          :onInput (partial modify :columns)}))
+          (dom/label nil
+                     "Rows: "
+                     (dom/input #js {:type "number"
+                                     :value rows
+                                     :min 2
+                                     :max 99
+                                     :style #js {:width "30px"}
+                                     :onInput (partial modify :rows)}))
+          (dom/label nil
+                     "Columns: "
+                     (dom/input #js {:type "number"
+                                     :value columns
+                                     :min 2
+                                     :max 99
+                                     :style #js {:width "30px"}
+                                     :onInput (partial modify :columns)})))
         (dom/div
           nil
-          (dom/span nil "Analysis: ")
-          (dom/select #js {:value analysis
-                           :onChange (partial modify :analysis)}
-                      (map (fn [name] (dom/option #js {:key name} name)) analyses)))
+          (dom/label nil
+                     "Analysis: "
+                     (dom/select #js {:value analysis
+                                      :onChange (partial modify :analysis)}
+                                 (map (fn [name] (dom/option #js {:key name} name)) analyses))))
         (when (contains? #{"distances" "path"} analysis)
           (dom/div
             nil
-            (dom/span nil "Start Row: ")
-            (dom/input #js {:type "number"
-                            :value start-row
-                            :min 0
-                            :max (dec rows)
-                            :style #js {:width "30px"}
-                            :onInput (partial modify :start-row)})
-            (dom/span nil "Start Column: ")
-            (dom/input #js {:type "number"
-                            :value start-col
-                            :min 0
-                            :max (dec columns)
-                            :style #js {:width "30px"}
-                            :onInput (partial modify :start-col)})))
+            (dom/label nil
+                       "Start Row: "
+                       (dom/input #js {:type "number"
+                                       :value start-row
+                                       :min 0
+                                       :max (dec rows)
+                                       :style #js {:width "30px"}
+                                       :onInput (partial modify :start-row)}))
+            (dom/label nil
+                       "Start Column: "
+                       (dom/input #js {:type "number"
+                                       :value start-col
+                                       :min 0
+                                       :max (dec columns)
+                                       :style #js {:width "30px"}
+                                       :onInput (partial modify :start-col)}))))
         (when (= "path" analysis)
           (dom/div
             nil
-            (dom/span nil "End Row: ")
-            (dom/input #js {:type "number"
-                            :value end-row
-                            :min 0
-                            :max (dec rows)
-                            :style #js {:width "30px"}
-                            :onInput (partial modify :end-row)})
-            (dom/span nil "End Column: ")
-            (dom/input #js {:type "number"
-                            :value end-col
-                            :min 0
-                            :max (dec columns)
-                            :style #js {:width "30px"}
-                            :onInput (partial modify :end-col)})))
+            (dom/label nil
+                      "End Row: "
+                       (dom/input #js {:type "number"
+                                       :value end-row
+                                       :min 0
+                                       :max (dec rows)
+                                       :style #js {:width "30px"}
+                                       :onInput (partial modify :end-row)}))
+            (dom/label nil
+                      "End Column: "
+                       (dom/input #js {:type "number"
+                                       :value end-col
+                                       :min 0
+                                       :max (dec columns)
+                                       :style #js {:width "30px"}
+                                       :onInput (partial modify :end-col)}))))
         (dom/div
           nil
           (dom/button #js {:disabled (not (ready-to-go maze))
