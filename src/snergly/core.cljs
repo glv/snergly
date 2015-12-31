@@ -17,31 +17,85 @@
 
 (def init-data
   {:app/algorithms (sort algs/algorithm-names)
+   :app/analyses ["none" "distances" "path" "longest path"]
    :maze {:algorithm ""
           :rows 10
           :columns 10
           :cell-size 10
           :grid nil
-          :channel nil}})
+          :channel nil
+
+          :analysis "none"
+          :start-row 0
+          :start-col 0
+          :end-row 0
+          :end-col 0}})
 
 (defn run [algorithm-name rows columns]
   (let [algorithm (algs/synchronous-algorithm algorithm-name)]
     (algorithm (grid/make-grid rows columns))))
 
-(defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
-  (let [maze-chan (async/chan)
-        _ (println (str "algorithm: " algorithm))
-        algorithm-fn (algs/algorithm-functions algorithm)]
-    (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~maze-chan})])
-    (go-loop []
-        (let [new-maze (async/<! maze-chan)]
-             (if new-maze
+(defn produce-analysis-async [maze {:keys [analysis start-row start-col end-row end-col] :as maze-params} maze-chan]
+  (println (str "analysis: " analysis))
+  (go-loop []
+           ;(condp = analysis
+           ;  "distances" ()
+           ;  "path" true
+           ;  "longest path" true
+           ;  )
+           (let [distances (async/<! maze-chan)]
+             (println "Once through the analysis loop")
+             (if-not distances
+               (println "No distances")
                (do
-                 (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom new-maze)})])
-                 (async/<! (async/timeout 1))
-                 (recur))
-               (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~nil})]))))
-    (algorithm-fn (grid/make-grid rows columns) maze-chan true)))
+                 (println (str "Distances: " distances))
+                 (recur))))
+    )
+  (algs/find-distances maze [start-row start-col] maze-chan true)
+  )
+
+(defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
+  (let [intermediate-chan (async/chan)
+        _ (println (str "algorithm: " algorithm))
+        algorithm-fn (algs/algorithm-functions algorithm)
+        _ (println (str "algorithm-fn: "))
+        result-chan (algorithm-fn (grid/make-grid rows columns) intermediate-chan)]
+    (println (str "result-chan: " result-chan))
+    (go-loop []
+             (println "in go loop")
+             (let [new-maze (async/<! intermediate-chan)]
+               (print (str "new-maze "))
+               (if new-maze
+                 (do
+                   (println "was not nil!")
+                   (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom new-maze)})])
+                   (async/<! (async/timeout 1))
+                   (recur))
+                 (let [maze (async/<! result-chan)]
+                   (println " was nil!")
+                   (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom maze)})])))))))
+
+(defn run-animation [maze-params]
+  (go
+    (let [maze (async/<! (produce-maze-async maze-params))
+          ; maze (async/<! (produce-analysis-async maze maze-params))
+          ])))
+
+  ;(let [maze-chan (async/chan)
+  ;      _ (println (str "algorithm: " algorithm))
+  ;      algorithm-fn (algs/algorithm-functions algorithm)]
+  ;  (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~maze-chan})])
+  ;  (go-loop [last-maze nil]
+  ;      (let [new-maze (async/<! maze-chan)]
+  ;           (if new-maze
+  ;             (do
+  ;               (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom new-maze)})])
+  ;               (async/<! (async/timeout 1))
+  ;               (recur new-maze))
+  ;             (do
+  ;               (async/<! (produce-analysis-async last-maze maze-params maze-chan))
+  ;               (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :channel :value ~nil})])))))
+  ;  (algorithm-fn (grid/make-grid rows columns) maze-chan true)))
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing
@@ -65,6 +119,10 @@
     {:value nil}))
 
 (defmethod produce-maze-value :algorithm
+  [_ form-value _]
+  form-value)
+
+(defmethod produce-maze-value :analysis
   [_ form-value _]
   form-value)
 
@@ -132,18 +190,20 @@
 (defui MazeControlPanel
   static om/IQuery
   (query [this]
-    '[:app/algorithms {:maze [:algorithms :rows :columns :grid]}])
+    '[:app/algorithms :app/analyses {:maze [:algorithms :rows :columns :grid :analysis :start-row :start-col :end-row :end-col]}])
   Object
   (render [this]
-    (let [{:keys [app/algorithms maze]} (om/props this)
-          {:keys [algorithm rows columns grid]} maze
+    (let [{:keys [app/algorithms app/analyses maze]} (om/props this)
+          {:keys [algorithm rows columns grid
+                  analysis start-row start-col end-row end-col]} maze
           modify (fn [maze-key e]
                    (om/transact! this `[(snergly.core/set-maze {:maze-key ~maze-key :value ~(aget e "target" "value")})]))
-          go-async (fn [maze e] (produce-maze-async maze))]
+          go-async (fn [maze e] (run-animation maze))]
       (dom/div
         nil
         (dom/div
           nil
+          (dom/span nil "Algorithm: ")
           (dom/select #js {:value algorithm
                            :onChange (partial modify :algorithm)}
                       (concat [(dom/option #js {:key ""} "")]
@@ -156,11 +216,57 @@
           (dom/span nil "Rows: ")
           (dom/input #js {:type "number"
                           :value rows
+                          :min 2
+                          :max 99
+                          :style #js {:width "30px"}
                           :onInput (partial modify :rows)})
           (dom/span nil "Columns: ")
           (dom/input #js {:type "number"
                           :value columns
+                          :min 2
+                          :max 99
+                          :style #js {:width "30px"}
                           :onInput (partial modify :columns)}))
+        (dom/div
+          nil
+          (dom/span nil "Analysis: ")
+          (dom/select #js {:value analysis
+                           :onChange (partial modify :analysis)}
+                      (map (fn [name] (dom/option #js {:key name} name)) analyses)))
+        (when (contains? #{"distances" "path"} analysis)
+          (dom/div
+            nil
+            (dom/span nil "Start Row: ")
+            (dom/input #js {:type "number"
+                            :value start-row
+                            :min 0
+                            :max (dec rows)
+                            :style #js {:width "30px"}
+                            :onInput (partial modify :start-row)})
+            (dom/span nil "Start Column: ")
+            (dom/input #js {:type "number"
+                            :value start-col
+                            :min 0
+                            :max (dec columns)
+                            :style #js {:width "30px"}
+                            :onInput (partial modify :start-col)})))
+        (when (= "path" analysis)
+          (dom/div
+            nil
+            (dom/span nil "End Row: ")
+            (dom/input #js {:type "number"
+                            :value end-row
+                            :min 0
+                            :max (dec rows)
+                            :style #js {:width "30px"}
+                            :onInput (partial modify :end-row)})
+            (dom/span nil "End Column: ")
+            (dom/input #js {:type "number"
+                            :value end-col
+                            :min 0
+                            :max (dec columns)
+                            :style #js {:width "30px"}
+                            :onInput (partial modify :end-col)})))
         (dom/div
           nil
           ;(dom/button #js {:disabled (not (ready-to-go maze))
