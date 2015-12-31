@@ -22,7 +22,26 @@ action, animating the flow of the algorithms as they process mazes.
 
 ## Usage
 
-TBD
+    Snergly: run and print a maze generation algorithm.
+    
+    Usage: lein run [options] algorithm
+    
+    Options:
+      -c, --cell-size PIXELS  10     Size of maze cells. Ignored when rendering as text.
+      -d, --distances START          Display result maze with distance labels from a starting cell (e.g., 2,2).
+      -h, --help
+      -l, --longest                  Show the longest path through the maze.
+      -o, --output FILENAME          Write output to an image file (format defined by extension)
+      -p, --path-to END              Result maze should show the path from START to END (requires -d).
+      -s, --size DIMENS       [5 5]  Grid size (e.g. 5 or 8x5)
+    
+    Algorithms:
+      aldous-broder
+      binary-tree
+      hunt-and-kill
+      sidewinder
+      wilsons
+      all
 
 ## ClojureScript Usage
 
