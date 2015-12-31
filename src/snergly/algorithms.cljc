@@ -202,20 +202,21 @@
 (s/defn find-distances :- g/Distances
   [grid :- g/Grid
    start :- g/CellPosition
-   result-chan
-   report-partial-steps?]
+   result-chan]
   (go-loop [distances {start 0 :origin start}
             current start
             frontier #?(:clj PersistentQueue/EMPTY
                         :cljs #queue [])]
-    (when report-partial-steps?
+    (when result-chan
       (async/>! result-chan distances))
     (let [cell (g/grid-cell grid current)
           current-distance (distances current)
           links (remove #(contains? distances %) (:links cell))
           next-frontier (apply conj frontier links)]
       (if (empty? next-frontier)
-        (async/>! result-chan (assoc distances :max current-distance :max-coord current))
+        (do
+          (when result-chan (async/close! result-chan))
+          (assoc distances :max current-distance :max-coord current))
         (recur (if (empty? links)
                  distances
                  (apply assoc distances
@@ -249,27 +250,31 @@
    "wilsons" maze-wilsons
    "hunt-and-kill" maze-hunt-and-kill})
 
-(defn synchronous-algorithm [alg-name]
-  (fn [grid]
-    (async/<!! ((algorithm-functions alg-name) grid nil))))
+#?(:clj
+   (defn synchronous-algorithm [alg-name]
+     (fn [grid]
+       (async/<!! ((algorithm-functions alg-name) grid nil))))
+   )
 
 (defn algorithm-fn [name options]
-  (let [algorithm (synchronous-algorithm name)
-        analyze-distances (fn [maze] (find-distances maze (:distances options)))
-        analyze-path (fn [maze] (find-path maze (:path-to options)
-                                           (analyze-distances maze)))
-        analyze-longest-path (fn [maze]
-                               (let [distances (find-distances maze [0 0])
-                                     distances-from-farthest (find-distances maze (:max-coord distances))]
-                                 (find-path maze (:max-coord distances-from-farthest) distances-from-farthest)))
-        analyze (cond
-                  (:longest options) analyze-longest-path
-                  (:path-to options) analyze-path
-                  (:distances options) analyze-distances
-                  :else (fn [_] {}))]
-    (fn [grid]
-      (let [maze (algorithm grid)
-            analysis (analyze maze)]
-        (g/grid-annotate-cells maze
-                                  {:label (g/xform-values util/base36 analysis)
-                                   :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)})))))
+  ;; Commenting this out for now while restructuring the cljs version
+  ;(let [algorithm (synchronous-algorithm name)
+  ;      analyze-distances (fn [maze] (find-distances maze (:distances options)))
+  ;      analyze-path (fn [maze] (find-path maze (:path-to options)
+  ;                                         (analyze-distances maze)))
+  ;      analyze-longest-path (fn [maze]
+  ;                             (let [distances (find-distances maze [0 0])
+  ;                                   distances-from-farthest (find-distances maze (:max-coord distances))]
+  ;                               (find-path maze (:max-coord distances-from-farthest) distances-from-farthest)))
+  ;      analyze (cond
+  ;                (:longest options) analyze-longest-path
+  ;                (:path-to options) analyze-path
+  ;                (:distances options) analyze-distances
+  ;                :else (fn [_] {}))]
+  ;  (fn [grid]
+  ;    (let [maze (algorithm grid)
+  ;          analysis (analyze maze)]
+  ;      (g/grid-annotate-cells maze
+  ;                                {:label (g/xform-values util/base36 analysis)
+  ;                                 :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)}))))
+)

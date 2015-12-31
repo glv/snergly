@@ -73,7 +73,7 @@
 (s/defn grid-cell :- Cell
   ([grid [row column]] (grid-cell grid row column))
   ([grid row column]
-   ((:cells grid) (cell-index grid row column))))
+    ((:cells grid) (cell-index grid row column))))
 
 (s/defn random-coord :- CellPosition
   [{:keys [rows columns] :as grid}]

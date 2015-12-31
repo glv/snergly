@@ -15,8 +15,11 @@
 
 (declare reconciler)
 
-(defn set-maze-param! [key val]
-  (om/transact! reconciler `[(snergly.core/set-maze {:maze-key ~key :value ~val})]))
+(defn set-maze-params! [& kvpairs]
+  (assert (= 0 (mod (count kvpairs) 2)) "Arguments must be pairs of keys and values")
+  (om/transact! reconciler
+                (mapv (fn [[k v]] `(snergly.core/set-maze {:maze-key ~k :value ~v}))
+                      (partition 2 kvpairs))))
 
 (def init-data
   {:app/algorithms (sort algs/algorithm-names)
@@ -35,46 +38,56 @@
 
           :active nil}})
 
-(defn run [algorithm-name rows columns]
-  (let [algorithm (algs/synchronous-algorithm algorithm-name)]
-    (algorithm (grid/make-grid rows columns))))
-
-(defn produce-analysis-async [maze {:keys [analysis start-row start-col end-row end-col] :as maze-params} maze-chan]
+(defn produce-analysis-async [maze {:keys [analysis start-row start-col end-row end-col] :as maze-params}]
   (println (str "analysis: " analysis))
-  (go-loop []
-           (let [distances (async/<! maze-chan)]
-             (println "Once through the analysis loop")
-             (if-not distances
-               (println "No distances")
-               (do
-                 (println (str "Distances: " distances))
-                 (recur))))
-    )
-  (algs/find-distances maze [start-row start-col] maze-chan true)
-  )
+  (if (= "distances" analysis)
+    (do
+      (let [intermediate-chan (async/chan)
+            result-chan (algs/find-distances maze [start-row start-col] intermediate-chan)]
+        (set-maze-params! :active "Finding distances …")
+        (go-loop []
+                 (let [distances (async/<! intermediate-chan)]
+                   (if distances
+                     (do
+                       (async/<! (async/timeout 0))
+                       (recur))
+                     (let [distances (async/<! result-chan)]
+                       (set-maze-params! :active nil)
+                       (async/<! (async/timeout 0)))
+                     )))
+        (async/timeout 0)))
+    (async/timeout 0)
+  ))
 
 (defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
-  (set-maze-param! :active "Carving maze …")
+  (println (str "algorithm: " algorithm))
+  (set-maze-params! :active "Carving maze …")
   (let [intermediate-chan (async/chan)
-        _ (println (str "algorithm: " algorithm))
         algorithm-fn (algs/algorithm-functions algorithm)
         result-chan (algorithm-fn (grid/make-grid rows columns) intermediate-chan)]
     (go-loop []
              (let [new-maze (async/<! intermediate-chan)]
                (if new-maze
                  (do
-                   (set-maze-param! :grid (atom new-maze))
-                   (async/<! (async/timeout 1))
+                   (set-maze-params! :grid (atom new-maze))
+                   (async/<! (async/timeout 0))
                    (recur))
                  (let [maze (async/<! result-chan)]
-                   (set-maze-param! :grid (atom maze))))))))
+                   (set-maze-params! :grid (atom maze)
+                                     :active nil)
+                   maze))))))
+
+(defn pull-until-empty [chan]
+  (go-loop [last-val nil]
+           (let [val (async/<! chan)]
+             (if val
+               (recur val)
+               last-val))))
 
 (defn run-animation [maze-params]
   (go
     (let [maze (async/<! (produce-maze-async maze-params))
-          ; maze (async/<! (produce-analysis-async maze maze-params))
-          ]
-      (set-maze-param! :active nil))))
+          maze (async/<! (produce-analysis-async maze maze-params))])))
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing
@@ -128,8 +141,7 @@
        (or (nil? grid)
            (not= algorithm (:algorithm-name grid))
            (not= rows (:rows grid))
-           (not= columns (:columns grid))))
-  )
+           (not= columns (:columns grid)))))
 
 (defui MazeDisplay
   static om/IQuery
@@ -182,6 +194,7 @@
                    (om/transact! this `[(snergly.core/set-maze {:maze-key ~maze-key :value ~(aget e "target" "value")})]))
           go-async (fn [maze e] (run-animation maze))]
       ;; TODO: remember how to disable form elements by group, rather than one-at-a-time.
+      ;; TODO: when rows/cols are reduced, adjust analysis params downward if necessary.
       (dom/div
         nil
         (dom/div
