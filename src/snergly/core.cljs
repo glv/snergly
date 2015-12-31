@@ -15,6 +15,9 @@
 
 (declare reconciler)
 
+(defn set-maze-param! [key val]
+  (om/transact! reconciler `[(snergly.core/set-maze {:maze-key ~key :value ~val})]))
+
 (def init-data
   {:app/algorithms (sort algs/algorithm-names)
    :app/analyses ["none" "distances"] ; "path" "longest path"
@@ -28,7 +31,9 @@
           :start-row 0
           :start-col 0
           :end-row 0
-          :end-col 0}})
+          :end-col 0
+
+          :active nil}})
 
 (defn run [algorithm-name rows columns]
   (let [algorithm (algs/synchronous-algorithm algorithm-name)]
@@ -49,6 +54,7 @@
   )
 
 (defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
+  (set-maze-param! :active "Carving maze …")
   (let [intermediate-chan (async/chan)
         _ (println (str "algorithm: " algorithm))
         algorithm-fn (algs/algorithm-functions algorithm)
@@ -57,17 +63,18 @@
              (let [new-maze (async/<! intermediate-chan)]
                (if new-maze
                  (do
-                   (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom new-maze)})])
+                   (set-maze-param! :grid (atom new-maze))
                    (async/<! (async/timeout 1))
                    (recur))
                  (let [maze (async/<! result-chan)]
-                   (om/transact! reconciler `[(snergly.core/set-maze {:maze-key :grid :value ~(atom maze)})])))))))
+                   (set-maze-param! :grid (atom maze))))))))
 
 (defn run-animation [maze-params]
   (go
     (let [maze (async/<! (produce-maze-async maze-params))
           ; maze (async/<! (produce-analysis-async maze maze-params))
-          ])))
+          ]
+      (set-maze-param! :active nil))))
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing
@@ -98,6 +105,10 @@
   [_ form-value _]
   form-value)
 
+(defmethod produce-maze-value :active
+  [_ form-value _]
+  form-value)
+
 (defmethod produce-maze-value :grid
   [_ new-value {:keys [maze] :as state}]
   (let [{:keys [algorithm rows columns grid]} maze]
@@ -123,7 +134,7 @@
 (defui MazeDisplay
   static om/IQuery
   (query [this]
-    '[{:maze [:grid :rows :columns :cell-size :algorithm]}])
+    '[{:maze [:grid :rows :columns :cell-size :algorithm :active]}])
   Object
   (componentDidMount [this]
     (let [{:keys [grid cell-size] :as maze} (om/props this)
@@ -140,10 +151,12 @@
       )
     )
   (render [this]
-    (let [{:keys [grid rows columns algorithm cell-size] :as maze} (om/props this)]
+    (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
             width (inc (* cell-size columns))]
+        (println (str "Active: " active))
         (dom/div nil
+                 (dom/div nil (or active "\u00a0")) ; &nbsp;
                  (dom/canvas #js {:id "c1"
                                   :height height
                                   :width width
@@ -155,15 +168,20 @@
 (defui MazeControlPanel
   static om/IQuery
   (query [this]
-    '[:app/algorithms :app/analyses {:maze [:algorithms :rows :columns :grid :analysis :start-row :start-col :end-row :end-col]}])
+    '[:app/algorithms :app/analyses
+      {:maze [:algorithm :rows :columns :grid
+              :analysis :start-row :start-col :end-row :end-col
+              :active]}])
   Object
   (render [this]
     (let [{:keys [app/algorithms app/analyses maze]} (om/props this)
           {:keys [algorithm rows columns grid
-                  analysis start-row start-col end-row end-col]} maze
+                  analysis start-row start-col end-row end-col
+                  active]} maze
           modify (fn [maze-key e]
                    (om/transact! this `[(snergly.core/set-maze {:maze-key ~maze-key :value ~(aget e "target" "value")})]))
           go-async (fn [maze e] (run-animation maze))]
+      ;; TODO: remember how to disable form elements by group, rather than one-at-a-time.
       (dom/div
         nil
         (dom/div
@@ -171,6 +189,7 @@
           (dom/label nil
                      "Algorithm: "
                      (dom/select #js {:value algorithm
+                                      :disabled active
                                       :onChange (partial modify :algorithm)}
                                  (concat [(dom/option #js {:key ""} "")]
                                          (map
@@ -182,6 +201,7 @@
           (dom/label nil
                      "Rows: "
                      (dom/input #js {:type "number"
+                                     :disabled active
                                      :value rows
                                      :min 2
                                      :max 99
@@ -190,6 +210,7 @@
           (dom/label nil
                      "Columns: "
                      (dom/input #js {:type "number"
+                                     :disabled active
                                      :value columns
                                      :min 2
                                      :max 99
@@ -200,6 +221,7 @@
           (dom/label nil
                      "Analysis: "
                      (dom/select #js {:value analysis
+                                      :disabled active
                                       :onChange (partial modify :analysis)}
                                  (map (fn [name] (dom/option #js {:key name} name)) analyses))))
         (when (contains? #{"distances" "path"} analysis)
@@ -208,6 +230,7 @@
             (dom/label nil
                        "Start Row: "
                        (dom/input #js {:type "number"
+                                       :disabled active
                                        :value start-row
                                        :min 0
                                        :max (dec rows)
@@ -216,6 +239,7 @@
             (dom/label nil
                        "Start Column: "
                        (dom/input #js {:type "number"
+                                       :disabled active
                                        :value start-col
                                        :min 0
                                        :max (dec columns)
@@ -227,6 +251,7 @@
             (dom/label nil
                       "End Row: "
                        (dom/input #js {:type "number"
+                                       :disabled active
                                        :value end-row
                                        :min 0
                                        :max (dec rows)
@@ -235,6 +260,7 @@
             (dom/label nil
                       "End Column: "
                        (dom/input #js {:type "number"
+                                       :disabled active
                                        :value end-col
                                        :min 0
                                        :max (dec columns)
@@ -242,7 +268,7 @@
                                        :onInput (partial modify :end-col)}))))
         (dom/div
           nil
-          (dom/button #js {:disabled (not (ready-to-go maze))
+          (dom/button #js {:disabled (or active (not (ready-to-go maze)))
                            :onClick (partial go-async maze)}
                       "Go!"))
         (when grid (dom/div nil (maze-display maze)))
