@@ -228,7 +228,6 @@
     (go-loop [grid (assoc grid :algorithm-name "recursive-backtracker")
               stack (list (g/random-coord grid))]
              (when (and result-chan (g/changed? grid))
-               (println "reporting")
                (async/>! result-chan grid))
              (if (empty? stack)
                (do
@@ -247,8 +246,6 @@
               current start
               frontier #?(:clj PersistentQueue/EMPTY
                           :cljs #queue [])]
-      ;(when result-chan
-      ;  (async/>! result-chan distances))
       (let [cell (g/grid-cell grid current)
             current-distance (distances current)
             links (remove #(contains? distances %) (:links cell))
@@ -266,11 +263,13 @@
                    ;; going on, and it really gives the impression of a flood).
                    ;; I just need to figure out a better way of triggering that
                    ;; condition.
-                   (let [new-distances (apply assoc distances :max (inc current-distance)
-                                              (mapcat #(vector % (inc current-distance)) links))]
-                     (when (and result-chan
-                                (> (new-distances (peek next-frontier)) current-distance))
-                       (async/>! result-chan new-distances))
+                   (let [new-distances (g/add-distances distances links (inc current-distance))
+                         new-distances (if (and result-chan
+                                                (g/changed? new-distances)
+                                                (> (new-distances (peek next-frontier)) current-distance))
+                                         (do (async/>! result-chan new-distances)
+                                             (g/begin-step new-distances))
+                                         new-distances)]
                      new-distances))
                  (peek next-frontier)
                  (pop next-frontier)))))))

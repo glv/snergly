@@ -51,13 +51,13 @@
       (let [intermediate-chan (async/chan)
             result-chan (algs/find-distances maze [start-row start-col] intermediate-chan)]
         (set-maze-params! :active "Finding distances …")
-        (go-loop []
+        (go-loop [grid maze]
                  (let [distances (async/<! intermediate-chan)]
                    (if distances
-                     (do
-                       (set-maze-params! :grid (atom (annotate-grid maze distances)))
+                     (let [grid (annotate-grid grid distances)]
+                       (set-maze-params! :grid (atom grid))
                        (async/<! (async/timeout 0))
-                       (recur))
+                       (recur grid))
                      (let [distances (async/<! result-chan)]
                        (set-maze-params! :grid (atom (annotate-grid maze distances))
                                          :active nil)
