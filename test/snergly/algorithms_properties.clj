@@ -35,11 +35,17 @@
 
 (use-fixtures :once schema.test/validate-schemas)
 
+;; -----------------------------------------------------------------------------
+;; Generators
+
 (def gen-dimen
   (gen/fmap inc gen/s-pos-int))
 
 (def gen-grid
   (gen/fmap #(apply grid/make-grid %) (gen/vector gen-dimen 2)))
+
+;; -----------------------------------------------------------------------------
+;; Utility and validation functions
 
 (defn grid-cells [g]
   (map #(grid/grid-cell g %) (grid/grid-coords g)))
@@ -65,6 +71,9 @@
                (recur (peek next-frontier)
                       (pop next-frontier)
                       (conj visited current-coord)))))))
+
+;; -----------------------------------------------------------------------------
+;; Capturing asynchronous updates
 
 (defn initial-grid [algorithm-fn grid]
   (let [intermediate-chan (async/chan)
@@ -101,6 +110,9 @@
               ))]
     (map compute-changes (partition 2 (interleave grids (rest grids))))))
 
+;; -----------------------------------------------------------------------------
+;; Property definitions
+
 (defmacro check-algorithm-properties
   [alg-name & specs]
   ;; In these definitions, some names are used consistently to help make
@@ -124,6 +136,7 @@
                 #{:perfect :first-new :all-changed :each-changes :accurate-changes :updates-link-2}
                 (into #{} specs))]
     `(do
+       ;; Is the final grid a perfect maze?
        (when (contains? ~specs :perfect)
          (defspec ~(symbol (str alg-name "-produces-a-perfect-maze"))
            5
@@ -137,12 +150,14 @@
                (not (has-cycle? final#)) ; no cycles
                ))))
 
+       ;; Is the initial grid a new maze with no changes?
        (when (contains? ~specs :first-new)
          (defspec ~(symbol (str alg-name "-first-grid-is-new"))
            2
            (prop/for-all [grid# gen-grid]
              (new-grid? (initial-grid (algorithm-functions ~alg-name) grid#)))))
 
+       ;; Is every cell eventually changed?
        (when (contains? ~specs :all-changed)
          (defspec ~(symbol (str alg-name "-all-cells-changed"))
            10
@@ -152,6 +167,7 @@
                    changed-cells# (apply set/union change-sets#)]
                (= (into #{} (grid/grid-coords grid#)) changed-cells#)))))
 
+       ;; Do all updates actually change the grid?
        (when (contains? ~specs :each-changes)
          (defspec ~(symbol (str alg-name "-each-update-changes"))
            5
@@ -161,6 +177,7 @@
                ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
                (every? not-empty change-sets#)))))
 
+       ;; Does each update link exactly two cells?
        (when (contains? ~specs :updates-link-2)
          (defspec ~(symbol (str alg-name "-links-two-cells-each-update"))
            5
@@ -175,6 +192,8 @@
 
        ;; This isn't working, and it's too complex, anyway.  I might remove it
        ;; and trust that :each-changes plus :updates-link-2 suffice.
+       ;;
+       ;; Is each update's :changed-cells set accurate?
        #_(when (contains? ~specs :accurate-changes)
            (defspec ~(symbol (str alg-name "-cells-changed-is-accurate"))
              5
@@ -186,6 +205,9 @@
 
        )
     ))
+
+;; -----------------------------------------------------------------------------
+;; Checking the algorithms
 
 (check-algorithm-properties "binary-tree")
 (check-algorithm-properties "sidewinder")
