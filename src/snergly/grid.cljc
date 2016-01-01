@@ -1,10 +1,16 @@
 (ns snergly.grid
   (:require [schema.core :as s :include-macros true]
-            [snergly.util :as util]))
+            [schema.experimental.abstract-map :as abstract-map :include-macros true]
+            [snergly.util :as util]
+            [clojure.set :as set]))
 
 (def NonNegativeInt
   "Schema for cell coordinates and sizes"
   (s/constrained s/Int (comp not neg?) "non-negative integer"))
+
+(def GridDimen
+  "A maze doesn't make sense in a grid smaller than 2x2"
+  (s/constrained s/Int #(> % 1) "integer > 1"))
 
 (def CellPosition
   "Schema for cell [row col] coordinates"
@@ -22,19 +28,20 @@
    s/Keyword s/Any ; for annotations: distances, colors, labels, etc.
    })
 
-(def Grid
-  "Schema for maze grid"
-  {:type (s/eq :Grid)
-   :algorithm-name s/Str ; algorithms should set this to indicate how the grid was generated
-   :rows NonNegativeInt
-   :columns NonNegativeInt
-   :cells [Cell]
-   :changed-cells (s/maybe #{CellPosition})})
+(s/defschema TracksChanges
+  (abstract-map/abstract-map-schema
+    :type
+    {:changed-cells (s/maybe #{CellPosition})}))
 
-(def Distances
-  "Schema for a distance map"
+(abstract-map/extend-schema Grid TracksChanges [:Grid]
+  {:algorithm-name s/Str ; algorithms should set this to indicate how the grid was generated
+   :rows GridDimen
+   :columns GridDimen
+   :cells [Cell]})
+
+(abstract-map/extend-schema Distances TracksChanges [:Distances]
   {:origin CellPosition ; the cell distances are relative to
-   :max-coord CellPosition ; the farthest cell from :origin
+   (s/optional-key :max-coord) CellPosition ; the farthest cell from :origin
    :max NonNegativeInt ; the distance of :max-coord from :origin
    CellPosition NonNegativeInt ; the distance from :origin to CellPosition
    })
@@ -50,14 +57,14 @@
    :links #{}})
 
 (s/defn cell-neighbors :- [CellPosition]
-  ([cell] (cell-neighbors cell [:north :south :east :west]))
+  ([cell :- Cell] (cell-neighbors cell [:north :south :east :west]))
   ([cell :- Cell
     directions :- [(s/enum :north :south :east :west)]]
    (filter identity (map cell directions))))
 
 (s/defn make-grid :- Grid
   "Creates and returns a new grid with the specified row and column sizes."
-  [rows columns]
+  [rows :- GridDimen columns :- GridDimen]
   {:type           :Grid
    :algorithm-name "none"
    :rows           rows
@@ -67,51 +74,55 @@
    :changed-cells  nil})
 
 (s/defn cell-index :- NonNegativeInt
-  ([grid [row column]] (cell-index grid row column))
-  ([grid row column] (+ (* row (:columns grid)) column)))
+  ([grid :- Grid
+    [row column] :- CellPosition] (cell-index grid row column))
+  ([grid :- Grid row :- NonNegativeInt column :- NonNegativeInt] (+ (* row (:columns grid)) column)))
 
 (s/defn grid-cell :- Cell
-  ([grid [row column]] (grid-cell grid row column))
-  ([grid row column]
+  ([grid :- Grid
+    [row column] :- CellPosition] (grid-cell grid row column))
+  ([grid :- Grid row :- NonNegativeInt column :- NonNegativeInt]
     ((:cells grid) (cell-index grid row column))))
 
 (s/defn random-coord :- CellPosition
-  [{:keys [rows columns] :as grid}]
+  [{:keys [rows columns] :as grid} :- Grid]
   (let [row (rand-int rows)
         column (rand-int columns)]
     [row column]))
 
 (s/defn grid-size :- NonNegativeInt
-  [{:keys [rows columns]}]
+  [{:keys [rows columns]} :- Grid]
   (* rows columns))
 
 (s/defn grid-row-coords :- [[CellPosition]]
-  [{:keys [rows columns]}]
+  [{:keys [rows columns]} :- Grid]
   "Grid cell coordinates, batched into rows."
   (for [row (range rows)]
     (for [column (range columns)]
       [row column])))
 
 (s/defn grid-coords :- [CellPosition]
-  [{:keys [rows columns]}]
+  [{:keys [rows columns]} :- Grid]
   (for [row (range rows) column (range columns)]
     [row column]))
 
 (s/defn grid-deadends :- [Cell]
-  [grid]
+  [grid :- Grid]
   (filter #(= 1 (count (:links %)))
           (map #(grid-cell grid %) (grid-coords grid))))
 
-(s/defn begin-step :- Grid
-  [grid :- Grid]
-  (assoc grid :changed-cells #{}))
+(s/defn begin-step :- TracksChanges
+  [thing :- TracksChanges]
+  (assoc thing :changed-cells #{}))
 
-(s/defn new? [grid :- Grid]
-  (nil? (:changed-cells grid)))
+(s/defn new? :- s/Bool
+  [thing :- TracksChanges]
+  (nil? (:changed-cells thing)))
 
-(s/defn changed? [grid :- Grid]
-  (or (new? grid)
-      (not-empty (:changed-cells grid))))
+(s/defn changed? :- s/Bool
+  [thing :- TracksChanges]
+  (boolean (or (new? thing)
+               (not-empty (:changed-cells thing)))))
 
 (s/defn link-cells :- Grid
   [{:keys [cells changed-cells] :as grid} :- Grid
@@ -126,8 +137,28 @@
                              (assoc neighbor :links (conj neighbor-links cell-coord)))
                 :changed-cells (conj changed-cells cell-coord neighbor-coord))))
 
-(defn linked? [cell other-cell-coord]
+(s/defn linked? :- s/Bool
+  [cell :- Cell other-cell-coord :- CellPosition]
   (contains? (:links cell) other-cell-coord))
+
+(s/defn make-distances :- Distances
+  "Creates and returns a new distances object with the supplied origin."
+  [origin :- CellPosition]
+  {:type   :Distances
+   :origin origin
+   :max 0
+   origin 0
+   :changed-cells nil})
+
+(s/defn add-distances :- Distances
+  [{:keys [changed-cells] :as distances} :- Distances
+   coords :- [CellPosition]
+   distance :- NonNegativeInt]
+  (let [new-max (max distance (:max distances))]
+    (apply assoc distances
+           :max new-max
+           :changed-cells (apply conj (or changed-cells #{}) coords)
+           (mapcat #(vector % distance) coords))))
 
 (s/defn xform-values :- Distances
   [value-xform

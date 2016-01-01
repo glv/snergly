@@ -237,12 +237,12 @@
                  (recur new-grid new-stack)
                  )))))
 
-(s/defn find-distances :- g/Distances
+(s/defn find-distances
   ([grid :- g/Grid start :- g/CellPosition] (find-distances grid start nil))
   ([grid :- g/Grid
     start :- g/CellPosition
     result-chan]
-    (go-loop [distances {start 0 :origin start :max 0}
+    (go-loop [distances (g/make-distances start)
               current start
               frontier #?(:clj PersistentQueue/EMPTY
                           :cljs #queue [])]

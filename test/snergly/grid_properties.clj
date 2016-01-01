@@ -9,8 +9,11 @@
 
 (use-fixtures :once schema.test/validate-schemas)
 
+(def gen-dimen
+  (gen/fmap inc gen/s-pos-int))
+
 (def gen-dimen-and-coord
-  (gen/bind gen/s-pos-int
+  (gen/bind gen-dimen
             (fn [dimen] (gen/tuple (gen/return dimen) (gen/choose 0 (dec dimen))))))
 
 (defn valid-coord?
@@ -65,8 +68,8 @@
 
 (defspec grids-are-well-formed
   30
-  (prop/for-all [rows gen/s-pos-int
-                 cols gen/s-pos-int]
+  (prop/for-all [rows gen-dimen
+                 cols gen-dimen]
     (let [grid (make-grid rows cols)]
       (and (= rows (:rows grid))
            (= cols (:columns grid))
@@ -74,24 +77,24 @@
 
 (defspec random-coords-are-within-grid
   100
-  (prop/for-all [rows gen/s-pos-int
-                 cols gen/s-pos-int]
+  (prop/for-all [rows gen-dimen
+                 cols gen-dimen]
     (let [grid (make-grid rows cols)
           [row col] (random-coord grid)]
       (valid-coord? rows cols row col))))
 
 (defspec grid-row-coords-for-each-cell
   10
-  (prop/for-all [rows gen/s-pos-int
-                 cols gen/s-pos-int]
+  (prop/for-all [rows gen-dimen
+                 cols gen-dimen]
     (let [grid (make-grid rows cols)]
       (= (grid-size grid)
          (count (apply concat (grid-row-coords grid)))))))
 
 (defspec grid-coords-for-each-cell
   10
-  (prop/for-all [rows gen/s-pos-int
-                 cols gen/s-pos-int]
+  (prop/for-all [rows gen-dimen
+                 cols gen-dimen]
     (let [grid (make-grid rows cols)]
       (= (grid-size grid)
          (count (grid-coords grid))))))

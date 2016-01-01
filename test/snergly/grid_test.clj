@@ -83,30 +83,54 @@
            (-> rowseq (nth 2) (nth 4))))))
 
 (deftest t-begin-step
-  (let [grid3x5 (assoc (make-grid 3 5) :changed-cells #{[0 1] [2 3]})]
-    (let [reset-grid (begin-step grid3x5)]
-      (is (empty? (:changed-cells reset-grid))))))
+  (let [grid (assoc (make-grid 3 5) :changed-cells #{[0 1] [2 3]})
+        reset-grid (begin-step grid)]
+    (is (empty? (:changed-cells reset-grid))))
+  (let [distances (assoc (make-distances [1 1]) :changed-cells #{[0 1] [2 3]})
+        reset-distances (begin-step distances)]
+    (is (empty? (:changed-cells reset-distances)))))
+
+(deftest t-new?
+  (doseq [v [(make-grid 2 2)
+             (make-distances [0 0])]]
+    (is (new? v))
+    (is (not (new? (begin-step v))))
+    (is (not (new? (assoc v :changed-cells #{[0 0]}))))))
+
+(deftest t-changed?
+  (doseq [v [(make-grid 2 2)
+             (make-distances [0 0])]]
+    (is (changed? v))
+    (is (not (changed? (begin-step v))))
+    (is (changed? (assoc v :changed-cells #{[0 0]})))))
 
 (deftest t-link-cells
-  (let [grid3x5 (assoc (make-grid 3 5) :changed-cells #{[0 1] [2 3]})]
-    (let [linked-grid (link-cells grid3x5
-                                  (grid-cell grid3x5 1 3)
-                                  [2 3])]
-      (is (contains? (:links (grid-cell linked-grid 1 3)) [2 3]))
-      (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3]))
-      (is (= #{[0 1] [2 3] [1 3]} (:changed-cells linked-grid))))))
+  (let [grid3x5 (assoc (make-grid 3 5) :changed-cells #{[0 1] [2 3]})
+        linked-grid (link-cells grid3x5
+                                (grid-cell grid3x5 1 3)
+                                [2 3])]
+    (is (contains? (:links (grid-cell linked-grid 1 3)) [2 3]))
+    (is (contains? (:links (grid-cell linked-grid 2 3)) [1 3]))
+    (is (= #{[0 1] [2 3] [1 3]} (:changed-cells linked-grid)))))
+
+(deftest t-add-distances
+  (let [dist (assoc (make-distances [0 0]) :changed-cells #{[0 1] [2 3]})
+        updated-dist (add-distances dist [[0 2] [2 3]] 1)]
+    (is (= 1 (updated-dist [0 2])))
+    (is (= 1 (updated-dist [2 3])))
+    (is (= #{[0 1] [2 3] [0 2]} (:changed-cells updated-dist)))))
 
 (deftest t-grid-annotate-cells
   (let [grid3x2 (make-grid 3 2)
-        labels {:origin [1 1]
-                :max-coord [0 0]
-                :max 2
-                [0 0] 2
-                [0 1] 1
-                [1 0] 1
-                [1 1] 0
-                [2 0] 2
-                [2 1] 1}
+        labels (assoc (make-distances [1 1])
+                 :max-coord [0 0]
+                 :max 2
+                 [0 0] 2
+                 [0 1] 1
+                 [1 0] 1
+                 [1 1] 0
+                 [2 0] 2
+                 [2 1] 1)
         annotated (grid-annotate-cells grid3x2 {:distance labels})]
     (are [pos dist] (= dist (:distance (grid-cell annotated pos)))
                     [0 0] 2
