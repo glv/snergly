@@ -71,15 +71,16 @@
                       (pop next-frontier)
                       (conj visited current-coord)))))))
 
-(defn actual-changes [grids]
-  (letfn [(add-links [s cell]
-            (apply conj s (:links cell)))
-          (compute-changes [[a b]]
-            (let [a-links (reduce add-links #{} (grid-cells a))
-                  b-links (reduce add-links #{} (grid-cells b))]
-              (set/difference b-links a-links)
-              ))]
-    (map compute-changes (partition 2 (interleave grids (rest grids))))))
+(defn actual-change-sets [grids]
+  (letfn [(link-set [g coord]
+            (set (:links (grid/grid-cell g coord))))
+          (cell-changed? [a b coord]
+            (not= (link-set a coord) (link-set b coord)))
+          (changed-cells [[a b]]
+            {:pre [(and (= (:rows a) (:rows b))
+                        (= (:columns a) (:columns b)))]}
+            (set (filter (partial cell-changed? a b) (grid/grid-coords a))))]
+    (map changed-cells (partition 2 (interleave grids (rest grids))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Capturing asynchronous updates
@@ -136,7 +137,7 @@
        (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
              change-sets# (filter identity (map :changed-cells updates#))
              changed-cells# (apply set/union change-sets#)]
-         (= (into #{} (grid/grid-coords grid#)) changed-cells#)))))
+         (= (set (grid/grid-coords grid#)) changed-cells#)))))
 
 ;; Do all updates actually change the grid?
 (defmacro check-algorithm-each-update-changes [alg-name]
@@ -145,7 +146,6 @@
      (prop/for-all [grid# gen-grid]
        (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
              change-sets# (map :changed-cells updates#)]
-         ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
          (every? not-empty change-sets#)))))
 
 ;; Do all incompletes actually change the grid?
@@ -156,7 +156,6 @@
      (prop/for-all [grid# gen-grid]
        (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
              change-sets# (map :changed-cells incompletes#)]
-         ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
          (every? not-empty change-sets#)))))
 
 ;; Does each update link exactly two cells?
@@ -165,29 +164,21 @@
      5
      (prop/for-all [grid# gen-grid]
        (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
-             update-change-sets# (map :changed-cells updates#)
-             ;deltas# (partition 2 (interleave grids# (rest updates#)))
-             ;matched-up# (partition 2 (interleave update-change-sets# deltas#))
-             ]
+             update-change-sets# (map :changed-cells updates#)]
          (every? (fn [cs#] (= 2 (count cs#)))
                  update-change-sets#)))))
 
 ;; Does each incomplete link exactly two cells?
+;; (A looser version of updates-link-2 allowing a redundant final update)
 (defmacro check-algorithm-incompletes-link-2 [alg-name]
   `(defspec ~(symbol (str alg-name "-links-two-cells-each-incomplete"))
      5
      (prop/for-all [grid# gen-grid]
        (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
-             incomplete-change-sets# (map :changed-cells incompletes#)
-             ;deltas# (partition 2 (interleave grids# (rest incompletes#)))
-             ;matched-up# (partition 2 (interleave incomplete-change-sets# deltas#))
-             ]
+             incomplete-change-sets# (map :changed-cells incompletes#)]
          (every? (fn [cs#] (= 2 (count cs#)))
                  incomplete-change-sets#)))))
 
-;; This isn't working, and it's too complex, anyway.  I might remove it
-;; and trust that :each-changes plus :updates-link-2 suffice.
-;;
 ;; Is each update's :changed-cells set accurate?
 (defmacro check-algorithm-cells-changed-is-accurate [alg-name]
   `(defspec ~(symbol (str alg-name "-cells-changed-is-accurate"))
@@ -195,20 +186,16 @@
      (prop/for-all [grid# gen-grid]
        (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
              update-change-sets# (map :changed-cells updates#)
-             actual-changes# (actual-changes (cons grid# updates#))
-             foo# (doseq [c# update-change-sets#] (println (str "Change: " c#)))
-             foo# (println "---")
-             foo# (doseq [c# actual-changes#] (println (str "Change: " c#)))
-             ]
-         (every? (fn [[a# c#]] (= a# c#)) (partition 2 (interleave actual-changes# update-change-sets#)))))))
+             actual-change-sets# (actual-change-sets (cons grid# updates#))]
+         (every? (fn [[a# c#]] (= a# c#)) (partition 2 (interleave actual-change-sets# update-change-sets#)))))))
 
 (defmacro check-algorithm-properties
   [alg-name & specs]
 
   (let [specs (cond
-                (empty? specs)     #{:perfect :all-changed :each-changes :updates-link-2}
-                (= [:loose] specs) #{:perfect :all-changed :each-incomplete-changes :incompletes-link-2}
-                :else              (into #{} specs))]
+                (empty? specs)     #{:perfect :all-changed :accurate-changes :each-changes :updates-link-2}
+                (= [:loose] specs) #{:perfect :all-changed :accurate-changes :each-incomplete-changes :incompletes-link-2}
+                :else              (set specs))]
     `(do
        (when (contains? ~specs :perfect)
          (check-algorithm-perfect-maze ~alg-name))
@@ -237,36 +224,13 @@
 ;; -----------------------------------------------------------------------------
 ;; Checking the algorithms
 
-(check-algorithm-properties "binary-tree" :accurate-changes)
-
 (check-algorithm-properties "binary-tree")
 (check-algorithm-properties "sidewinder")
-(check-algorithm-properties "aldous-broder")
 (check-algorithm-properties "wilsons")
 ;; The following two can't pass :each-changes because the last update might be a duplicate.
+(check-algorithm-properties "aldous-broder" :loose)
 (check-algorithm-properties "hunt-and-kill" :loose)
 (check-algorithm-properties "recursive-backtracker" :loose)
-
-;; What kinds of properties can I assert about the maze algorithms?
-;;
-;; * The final grid is a perfect maze: each cell can reach every other cell
-;;   by exactly one path
-;;   * Each cell is linked to at least one other (done)
-;;   * Each cell is visited by find-distances (done)
-;;   * The graph contains no cycles (done)
-;; * At each step, the cells marked changed are the only ones that have changed
-;;   * implemented, but either not working right or they all fail.  But it's
-;;     super-complicated, amd might not be worth the trouble.
-;;   * perhaps a simpler version?  All of the current maze algorithms advance
-;;     a cell at a time. So perhaps just verify that each update changes two
-;;     cells, and those cells must be linked to each other.  That seems like a
-;;     much simpler proxy for what we want.
-;;     * this is partially done, but h-a-k and r-b fail because of the one
-;;       below.
-;; * Each reported grid is changed?
-;;   * done, but h-a-k and r-b fail it (in an innocuous way: the last grid is
-;;     reported twice).
-;; * (maybe) if no intermediate-chan, the result grid shows all cells changed
 
 ;; What kinds of properties can I assert about find-distances?
 ;;

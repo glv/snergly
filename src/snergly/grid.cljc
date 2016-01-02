@@ -180,7 +180,7 @@
                                    [:cells (cell-index grid cell-coord)]
                                    assoc-cell cell-coord))
         cells-to-annotate (if changed-cells changed-cells (grid-coords grid))]
-    (assoc (reduce annotate-cell grid cells-to-annotate) :changed-cells (into #{} cells-to-annotate))))
+    (assoc (reduce annotate-cell grid cells-to-annotate) :changed-cells (set cells-to-annotate))))
 
 (defn intlabel [val]
   #?(:clj     (format "%2d" val)

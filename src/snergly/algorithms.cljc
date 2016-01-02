@@ -102,11 +102,9 @@
 (s/defn maze-aldous-broder
   ([grid :- g/Grid] (maze-aldous-broder grid nil))
   ([grid :- g/Grid result-chan]
-    (go-loop [grid (assoc grid :algorithm-name "aldous-broder")
+    (go-loop [grid (assoc (g/begin-step grid) :algorithm-name "aldous-broder")
               current (g/random-coord grid)
               unvisited (dec (g/grid-size grid))]
-             (when (and result-chan (g/changed? grid))
-               (async/>! result-chan grid))
       (let [cell (g/grid-cell grid current)
             neighbor (rand-nth (g/cell-neighbors cell))
             neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))]
@@ -114,14 +112,17 @@
           (do
             (when result-chan (async/close! result-chan))
             grid)
-          (recur (if neighbor-new?
-                   (g/link-cells (g/begin-step grid) cell neighbor)
-                   (g/begin-step grid))
+          (recur (g/begin-step (if neighbor-new?
+                                 (let [new-grid (g/link-cells grid cell neighbor)]
+                                   (when (and result-chan (g/changed? new-grid))
+                                     (async/>! result-chan new-grid))
+                                   new-grid)
+                                 grid))
                  neighbor
                  (if neighbor-new? (dec unvisited) unvisited)))))))
 
 (defn wilsons-loop-erased-walk [grid start-coord unvisited]
-  (let [unvisited-set (into #{} unvisited)]
+  (let [unvisited-set (set unvisited)]
     (loop [current-coord start-coord
            path [current-coord]]
       (if-not (contains? unvisited-set current-coord)
