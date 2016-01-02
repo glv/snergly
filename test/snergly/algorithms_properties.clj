@@ -193,7 +193,7 @@
   [alg-name & specs]
 
   (let [specs (cond
-                (empty? specs)     #{:perfect :all-changed :accurate-changes :each-changes :updates-link-2}
+                (empty? specs)     #{:perfect :all-changed :accurate-changes :each-update-changes :updates-link-2}
                 (= [:loose] specs) #{:perfect :all-changed :accurate-changes :each-incomplete-changes :incompletes-link-2}
                 :else              (set specs))]
     `(do
@@ -203,7 +203,7 @@
        (when (contains? ~specs :all-changed)
          (check-algorithm-all-cells-changed ~alg-name))
 
-       (when (contains? ~specs :each-changes)
+       (when (contains? ~specs :each-update-changes)
          (check-algorithm-each-update-changes ~alg-name))
 
        (when (contains? ~specs :each-incomplete-changes)
@@ -227,7 +227,7 @@
 (check-algorithm-properties "binary-tree")
 (check-algorithm-properties "sidewinder")
 (check-algorithm-properties "wilsons")
-;; The following two can't pass :each-changes because the last update might be a duplicate.
+;; The following can't pass :each-changes because the last update might be a duplicate.
 (check-algorithm-properties "aldous-broder" :loose)
 (check-algorithm-properties "hunt-and-kill" :loose)
 (check-algorithm-properties "recursive-backtracker" :loose)
