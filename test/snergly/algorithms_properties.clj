@@ -71,17 +71,18 @@
                       (pop next-frontier)
                       (conj visited current-coord)))))))
 
+(defn actual-changes [grids]
+  (letfn [(add-links [s cell]
+            (apply conj s (:links cell)))
+          (compute-changes [[a b]]
+            (let [a-links (reduce add-links #{} (grid-cells a))
+                  b-links (reduce add-links #{} (grid-cells b))]
+              (set/difference b-links a-links)
+              ))]
+    (map compute-changes (partition 2 (interleave grids (rest grids))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Capturing asynchronous updates
-
-(defn initial-grid [algorithm-fn grid]
-  (let [intermediate-chan (async/chan)
-        result-chan (algorithm-fn grid intermediate-chan)]
-    (async/<!! (async/go-loop [first-g nil]
-                 (if-let [new-g (async/<! intermediate-chan)]
-                   (recur (or first-g new-g))
-                   (let [_ (async/<! result-chan)]
-                     first-g))))))
 
 (defn final-grid [algorithm-fn grid]
   (let [intermediate-chan (async/chan)
@@ -99,132 +100,144 @@
                    (recur (conj grids g))
                    (conj grids (async/<! result-chan)))))))
 
-(defn actual-changes [grids]
-  (letfn [(add-links [s cell]
-            (conj s (:links cell)))
-          (compute-changes [[a b]]
-            (let [a-links (reduce add-links #{} (grid-cells a))
-                  b-links (reduce add-links #{} (grid-cells b))]
-              (set/difference b-links a-links)
-              ))]
-    (map compute-changes (partition 2 (interleave grids (rest grids))))))
-
 ;; -----------------------------------------------------------------------------
 ;; Property definitions
 
+;; In these definitions, some names are used consistently to help make
+;; things clearer.
+;;
+;; * the word "final" refers to the final grid (the one that is the return
+;;   value from the algorithm)
+;; * the word "update" refers to all grids.  Each update is supposed to
+;;   include changes (because there's no sense supplying them for animation
+;;   unless they've changed).
+;; * the word "incomplete" refers to all of the updates *prior* to the final
+;;   grid.
+
+;; Is the final grid a perfect maze?
+(defmacro check-algorithm-perfect-maze [alg-name]
+  `(defspec ~(symbol (str alg-name "-produces-a-perfect-maze"))
+     5
+     (prop/for-all [grid# gen-grid]
+       (let [final# (final-grid (algorithm-functions "binary-tree") grid#)
+             links# (map :links (grid-cells final#))
+             distances# ((synchronous-fn find-distances) final# [0 0])
+             ]
+         (every? not-empty links#)                    ; quick check for no isolated cells
+         (every? #(contains? distances# %) (grid/grid-coords final#)) ; every cell reachable
+         (not (has-cycle? final#))                    ; no cycles
+         ))))
+
+;; Is every cell eventually changed?
+(defmacro check-algorithm-all-cells-changed [alg-name]
+  `(defspec ~(symbol (str alg-name "-all-cells-changed"))
+     10
+     (prop/for-all [grid# gen-grid]
+       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+             change-sets# (filter identity (map :changed-cells updates#))
+             changed-cells# (apply set/union change-sets#)]
+         (= (into #{} (grid/grid-coords grid#)) changed-cells#)))))
+
+;; Do all updates actually change the grid?
+(defmacro check-algorithm-each-update-changes [alg-name]
+  `(defspec ~(symbol (str alg-name "-each-update-changes"))
+     5
+     (prop/for-all [grid# gen-grid]
+       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+             change-sets# (map :changed-cells updates#)]
+         ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
+         (every? not-empty change-sets#)))))
+
+;; Do all incompletes actually change the grid?
+;; (A looser version of each-update-changes allowing a redundant final update)
+(defmacro check-algorithm-each-incomplete-changes [alg-name]
+  `(defspec ~(symbol (str alg-name "-each-incomplete-changes"))
+     5
+     (prop/for-all [grid# gen-grid]
+       (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
+             change-sets# (map :changed-cells incompletes#)]
+         ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
+         (every? not-empty change-sets#)))))
+
+;; Does each update link exactly two cells?
+(defmacro check-algorithm-updates-link-2 [alg-name]
+  `(defspec ~(symbol (str alg-name "-links-two-cells-each-update"))
+     5
+     (prop/for-all [grid# gen-grid]
+       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+             update-change-sets# (map :changed-cells updates#)
+             ;deltas# (partition 2 (interleave grids# (rest updates#)))
+             ;matched-up# (partition 2 (interleave update-change-sets# deltas#))
+             ]
+         (every? (fn [cs#] (= 2 (count cs#)))
+                 update-change-sets#)))))
+
+;; Does each incomplete link exactly two cells?
+(defmacro check-algorithm-incompletes-link-2 [alg-name]
+  `(defspec ~(symbol (str alg-name "-links-two-cells-each-incomplete"))
+     5
+     (prop/for-all [grid# gen-grid]
+       (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
+             incomplete-change-sets# (map :changed-cells incompletes#)
+             ;deltas# (partition 2 (interleave grids# (rest incompletes#)))
+             ;matched-up# (partition 2 (interleave incomplete-change-sets# deltas#))
+             ]
+         (every? (fn [cs#] (= 2 (count cs#)))
+                 incomplete-change-sets#)))))
+
+;; This isn't working, and it's too complex, anyway.  I might remove it
+;; and trust that :each-changes plus :updates-link-2 suffice.
+;;
+;; Is each update's :changed-cells set accurate?
+(defmacro check-algorithm-cells-changed-is-accurate [alg-name]
+  `(defspec ~(symbol (str alg-name "-cells-changed-is-accurate"))
+     5
+     (prop/for-all [grid# gen-grid]
+       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+             update-change-sets# (map :changed-cells updates#)
+             actual-changes# (actual-changes (cons grid# updates#))
+             foo# (doseq [c# update-change-sets#] (println (str "Change: " c#)))
+             foo# (println "---")
+             foo# (doseq [c# actual-changes#] (println (str "Change: " c#)))
+             ]
+         (every? (fn [[a# c#]] (= a# c#)) (partition 2 (interleave actual-changes# update-change-sets#)))))))
+
 (defmacro check-algorithm-properties
   [alg-name & specs]
-  ;; In these definitions, some names are used consistently to help make
-  ;; things clearer.
-  ;;
-  ;; * the word "final" refers to the final grid (the one that is the return
-  ;;   value from the algorithm)
-  ;; * the word "update" refers to all grids.  Each update is supposed to
-  ;;   include changes (because there's no sense supplying them for animation
-  ;;   unless they've changed).
-  ;; * the word "incomplete" refers to all of the updates *prior* to the final
-  ;;   grid.
 
   (let [specs (cond
-                (empty? specs)     #{:perfect :all-changed :each-changes :accurate-changes :updates-link-2}
-                (= [:loose] specs) #{:perfect :all-changed :each-incomplete-changes :accurate-changes :incompletes-link-2}
+                (empty? specs)     #{:perfect :all-changed :each-changes :updates-link-2}
+                (= [:loose] specs) #{:perfect :all-changed :each-incomplete-changes :incompletes-link-2}
                 :else              (into #{} specs))]
     `(do
-       ;; Is the final grid a perfect maze?
        (when (contains? ~specs :perfect)
-         (defspec ~(symbol (str alg-name "-produces-a-perfect-maze"))
-           5
-           (prop/for-all [grid# gen-grid]
-             (let [final# (final-grid (algorithm-functions "binary-tree") grid#)
-                   links# (map :links (grid-cells final#))
-                   distances# ((synchronous-fn find-distances) final# [0 0])
-                   ]
-               (every? not-empty links#)                    ; quick check for no isolated cells
-               (every? #(contains? distances# %) (grid/grid-coords final#)) ; every cell reachable
-               (not (has-cycle? final#))                    ; no cycles
-               ))))
+         (check-algorithm-perfect-maze ~alg-name))
 
-       ;; Is the initial grid a new maze with no changes?
-       (when (contains? ~specs :first-new)
-         (defspec ~(symbol (str alg-name "-first-grid-is-new"))
-           2
-           (prop/for-all [grid# gen-grid]
-             (new-grid? (initial-grid (algorithm-functions ~alg-name) grid#)))))
-
-       ;; Is every cell eventually changed?
        (when (contains? ~specs :all-changed)
-         (defspec ~(symbol (str alg-name "-all-cells-changed"))
-           10
-           (prop/for-all [grid# gen-grid]
-             (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
-                   change-sets# (filter identity (map :changed-cells updates#))
-                   changed-cells# (apply set/union change-sets#)]
-               (= (into #{} (grid/grid-coords grid#)) changed-cells#)))))
+         (check-algorithm-all-cells-changed ~alg-name))
 
-       ;; Do all updates actually change the grid?
        (when (contains? ~specs :each-changes)
-         (defspec ~(symbol (str alg-name "-each-update-changes"))
-           5
-           (prop/for-all [grid# gen-grid]
-             (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
-                   change-sets# (map :changed-cells updates#)]
-               ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
-               (every? not-empty change-sets#)))))
+         (check-algorithm-each-update-changes ~alg-name))
 
-       ;; Do all updates actually change the grid except the last?
        (when (contains? ~specs :each-incomplete-changes)
-         (defspec ~(symbol (str alg-name "-each-incomplete-changes"))
-           5
-           (prop/for-all [grid# gen-grid]
-             (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
-                   change-sets# (map :changed-cells incompletes#)]
-               ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
-               (every? not-empty change-sets#)))))
+         (check-algorithm-each-incomplete-changes ~alg-name))
 
-       ;; Does each update link exactly two cells?
        (when (contains? ~specs :updates-link-2)
-         (defspec ~(symbol (str alg-name "-links-two-cells-each-update"))
-           5
-           (prop/for-all [grid# gen-grid]
-             (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
-                   update-change-sets# (map :changed-cells updates#)
-                   ;deltas# (partition 2 (interleave grids# (rest updates#)))
-                   ;matched-up# (partition 2 (interleave update-change-sets# deltas#))
-                   ]
-               (every? (fn [cs#] (= 2 (count cs#)))
-                       update-change-sets#)))))
+         (check-algorithm-updates-link-2 ~alg-name))
 
-       ;; Does each incomplete link exactly two cells?
        (when (contains? ~specs :incompletes-link-2)
-         (defspec ~(symbol (str alg-name "-links-two-cells-each-incomplete"))
-           5
-           (prop/for-all [grid# gen-grid]
-             (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
-                   incomplete-change-sets# (map :changed-cells incompletes#)
-                   ;deltas# (partition 2 (interleave grids# (rest incompletes#)))
-                   ;matched-up# (partition 2 (interleave incomplete-change-sets# deltas#))
-                   ]
-               (every? (fn [cs#] (= 2 (count cs#)))
-                       incomplete-change-sets#)))))
+         (check-algorithm-incompletes-link-2 ~alg-name))
 
-       ;; This isn't working, and it's too complex, anyway.  I might remove it
-       ;; and trust that :each-changes plus :updates-link-2 suffice.
-       ;;
-       ;; Is each update's :changed-cells set accurate?
-       #_(when (contains? ~specs :accurate-changes)
-           (defspec ~(symbol (str alg-name "-cells-changed-is-accurate"))
-             5
-             (prop/for-all [grid# gen-grid]
-               (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
-                     update-change-sets# (map :changed-cells updates#)
-                     actual-changes# (actual-changes updates#)]
-                 (every? (fn [[a# c#]] (= a# c#)) (partition 2 (interleave actual-changes# update-change-sets#)))))))
+       (when (contains? ~specs :accurate-changes)
+         (check-algorithm-cells-changed-is-accurate ~alg-name))
 
        )
     ))
 
 ;; -----------------------------------------------------------------------------
 ;; Checking the algorithms
+
+(check-algorithm-properties "binary-tree" :accurate-changes)
 
 (check-algorithm-properties "binary-tree")
 (check-algorithm-properties "sidewinder")
