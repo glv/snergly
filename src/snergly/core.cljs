@@ -72,17 +72,21 @@
   (set-maze-params! :active "Carving maze …")
   (let [intermediate-chan (async/chan)
         algorithm-fn (algs/algorithm-functions algorithm)
+        grid (grid/make-grid rows columns)
         result-chan (algorithm-fn (grid/make-grid rows columns) intermediate-chan)]
-    (go-loop []
-             (if-let [new-maze (async/<! intermediate-chan)]
-               (do
-                 (set-maze-params! :grid (atom new-maze))
-                 (async/<! (async/timeout 0))
-                 (recur))
-               (let [maze (async/<! result-chan)]
-                 (set-maze-params! :grid (atom maze)
-                                   :active nil)
-                 maze)))))
+    (go
+      (set-maze-params! :grid (atom grid))
+      (async/<! (async/timeout 0))
+      (loop []
+        (if-let [new-maze (async/<! intermediate-chan)]
+          (do
+            (set-maze-params! :grid (atom new-maze))
+            (async/<! (async/timeout 0))
+            (recur))
+          (let [maze (async/<! result-chan)]
+            (set-maze-params! :grid (atom maze)
+                              :active nil)
+            maze))))))
 
 (defn run-animation [maze-params]
   (go

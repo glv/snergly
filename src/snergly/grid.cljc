@@ -121,8 +121,7 @@
 
 (s/defn changed? :- s/Bool
   [thing :- TracksChanges]
-  (boolean (or (new? thing)
-               (not-empty (:changed-cells thing)))))
+  (boolean (not-empty (:changed-cells thing))))
 
 (s/defn link-cells :- Grid
   [{:keys [cells changed-cells] :as grid} :- Grid

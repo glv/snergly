@@ -1,7 +1,6 @@
 (ns snergly.algorithms-properties
   (:import (clojure.lang PersistentQueue))
   (:require [clojure.test :refer :all]
-            [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.clojure-test :refer :all]
@@ -118,23 +117,18 @@
   ;; In these definitions, some names are used consistently to help make
   ;; things clearer.
   ;;
-  ;; * the word "initial" refers to the very first grid, which includes no
-  ;;   changes and no links.
-  ;; * a "report" is any grid that is supplied by the algorithm through either
-  ;;   channel, including the initial.
-  ;; * the word "update" refers to all reports except the initial.  Each update
-  ;;   is supposed to include changes (because there's no sense supplying them
-  ;;   for animation unless they've changed).
   ;; * the word "final" refers to the final grid (the one that is the return
   ;;   value from the algorithm)
-  ;; * the word "incomplete" refers to all of the reports *prior* to the final
-  ;;   grid, including the initial.
-  ;; * the word "intermediate" refers to all of the reports *except* for the
-  ;;   initial and the final.
+  ;; * the word "update" refers to all grids.  Each update is supposed to
+  ;;   include changes (because there's no sense supplying them for animation
+  ;;   unless they've changed).
+  ;; * the word "incomplete" refers to all of the updates *prior* to the final
+  ;;   grid.
 
-  (let [specs (if (empty? specs)
-                #{:perfect :first-new :all-changed :each-changes :accurate-changes :updates-link-2}
-                (into #{} specs))]
+  (let [specs (cond
+                (empty? specs)     #{:perfect :all-changed :each-changes :accurate-changes :updates-link-2}
+                (= [:loose] specs) #{:perfect :all-changed :each-incomplete-changes :accurate-changes :incompletes-link-2}
+                :else              (into #{} specs))]
     `(do
        ;; Is the final grid a perfect maze?
        (when (contains? ~specs :perfect)
@@ -145,9 +139,9 @@
                    links# (map :links (grid-cells final#))
                    distances# ((synchronous-fn find-distances) final# [0 0])
                    ]
-               (every? not-empty links#) ; quick check for no isolated cells
+               (every? not-empty links#)                    ; quick check for no isolated cells
                (every? #(contains? distances# %) (grid/grid-coords final#)) ; every cell reachable
-               (not (has-cycle? final#)) ; no cycles
+               (not (has-cycle? final#))                    ; no cycles
                ))))
 
        ;; Is the initial grid a new maze with no changes?
@@ -162,8 +156,8 @@
          (defspec ~(symbol (str alg-name "-all-cells-changed"))
            10
            (prop/for-all [grid# gen-grid]
-             (let [reports# (all-grids (algorithm-functions ~alg-name) grid#)
-                   change-sets# (filter identity (map :changed-cells reports#))
+             (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+                   change-sets# (filter identity (map :changed-cells updates#))
                    changed-cells# (apply set/union change-sets#)]
                (= (into #{} (grid/grid-coords grid#)) changed-cells#)))))
 
@@ -172,8 +166,18 @@
          (defspec ~(symbol (str alg-name "-each-update-changes"))
            5
            (prop/for-all [grid# gen-grid]
-             (let [updates# (rest (all-grids (algorithm-functions ~alg-name) grid#))
+             (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
                    change-sets# (map :changed-cells updates#)]
+               ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
+               (every? not-empty change-sets#)))))
+
+       ;; Do all updates actually change the grid except the last?
+       (when (contains? ~specs :each-incomplete-changes)
+         (defspec ~(symbol (str alg-name "-each-incomplete-changes"))
+           5
+           (prop/for-all [grid# gen-grid]
+             (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
+                   change-sets# (map :changed-cells incompletes#)]
                ;(println (str "Change sets: " (into [] (map empty? change-sets#))))
                (every? not-empty change-sets#)))))
 
@@ -182,13 +186,26 @@
          (defspec ~(symbol (str alg-name "-links-two-cells-each-update"))
            5
            (prop/for-all [grid# gen-grid]
-             (let [reports# (all-grids (algorithm-functions ~alg-name) grid#)
-                   update-change-sets# (map :changed-cells (rest reports#))
-                   ;deltas# (partition 2 (interleave grids# (rest reports##)))
+             (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+                   update-change-sets# (map :changed-cells updates#)
+                   ;deltas# (partition 2 (interleave grids# (rest updates#)))
                    ;matched-up# (partition 2 (interleave update-change-sets# deltas#))
                    ]
                (every? (fn [cs#] (= 2 (count cs#)))
                        update-change-sets#)))))
+
+       ;; Does each incomplete link exactly two cells?
+       (when (contains? ~specs :incompletes-link-2)
+         (defspec ~(symbol (str alg-name "-links-two-cells-each-incomplete"))
+           5
+           (prop/for-all [grid# gen-grid]
+             (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
+                   incomplete-change-sets# (map :changed-cells incompletes#)
+                   ;deltas# (partition 2 (interleave grids# (rest incompletes#)))
+                   ;matched-up# (partition 2 (interleave incomplete-change-sets# deltas#))
+                   ]
+               (every? (fn [cs#] (= 2 (count cs#)))
+                       incomplete-change-sets#)))))
 
        ;; This isn't working, and it's too complex, anyway.  I might remove it
        ;; and trust that :each-changes plus :updates-link-2 suffice.
@@ -198,9 +215,9 @@
            (defspec ~(symbol (str alg-name "-cells-changed-is-accurate"))
              5
              (prop/for-all [grid# gen-grid]
-               (let [reports# (all-grids (algorithm-functions ~alg-name) grid#)
-                     update-change-sets# (map :changed-cells (rest reports#))
-                     actual-changes# (actual-changes reports#)]
+               (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+                     update-change-sets# (map :changed-cells updates#)
+                     actual-changes# (actual-changes updates#)]
                  (every? (fn [[a# c#]] (= a# c#)) (partition 2 (interleave actual-changes# update-change-sets#)))))))
 
        )
@@ -213,11 +230,9 @@
 (check-algorithm-properties "sidewinder")
 (check-algorithm-properties "aldous-broder")
 (check-algorithm-properties "wilsons")
-;; The following two cannot yet pass :each-changes and :updates-link-2
-(check-algorithm-properties "hunt-and-kill" :perfect :first-new :all-changed)
-(check-algorithm-properties "recursive-backtracker" :perfect :first-new :all-changed)
-
-
+;; The following two can't pass :each-changes because the last update might be a duplicate.
+(check-algorithm-properties "hunt-and-kill" :loose)
+(check-algorithm-properties "recursive-backtracker" :loose)
 
 ;; What kinds of properties can I assert about the maze algorithms?
 ;;

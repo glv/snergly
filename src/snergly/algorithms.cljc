@@ -201,14 +201,22 @@
   ([grid :- g/Grid result-chan]
     (go-loop [grid (assoc grid :algorithm-name "hunt-and-kill")
               current-coord (g/random-coord grid)]
-             (when (and result-chan (g/changed? grid))
-               (async/>! result-chan grid))
       (let [[new-grid next-coord] (hunt-and-kill-step (g/begin-step grid) current-coord)]
+        ;; at this point, new-grid may or may not have been changed.
+        ;;                new-grid may or may not be the final.
+        ;; The only simple way to deal with this, I think, is to rework these
+        ;; algorithms so that they send all of their results through a single
+        ;; channel (rather than intermediate results through one and the final
+        ;; through another) and then put a transducer on that channel that
+        ;; filters everything that's not changed.
         (if-not next-coord
           (do
             (when result-chan (async/close! result-chan))
             new-grid)
-          (recur new-grid next-coord))))))
+          (do
+            (when (and result-chan (g/changed? new-grid))
+              (async/>! result-chan new-grid))
+            (recur new-grid next-coord)))))))
 
 (defn recursive-backtracker-step [grid stack]
   (let [grid (g/begin-step grid)
@@ -227,15 +235,14 @@
   ([grid :- g/Grid result-chan]
     (go-loop [grid (assoc grid :algorithm-name "recursive-backtracker")
               stack (list (g/random-coord grid))]
-             (when (and result-chan (g/changed? grid))
-               (async/>! result-chan grid))
              (if (empty? stack)
                (do
                  (when result-chan (async/close! result-chan))
                  grid)
                (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
-                 (recur new-grid new-stack)
-                 )))))
+                 (when (and result-chan (g/changed? grid))
+                   (async/>! result-chan grid))
+                 (recur new-grid new-stack))))))
 
 (s/defn find-distances
   ([grid :- g/Grid start :- g/CellPosition] (find-distances grid start nil))

@@ -100,7 +100,7 @@
 (deftest t-changed?
   (doseq [v [(make-grid 2 2)
              (make-distances [0 0])]]
-    (is (changed? v))
+    (is (not (changed? v)))
     (is (not (changed? (begin-step v))))
     (is (changed? (assoc v :changed-cells #{[0 0]})))))
 
