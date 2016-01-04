@@ -43,6 +43,21 @@
 (def gen-grid
   (gen/fmap #(apply grid/make-grid %) (gen/vector gen-dimen 2)))
 
+(def gen-grid-and-coord
+  (gen/bind gen-grid
+            (fn [grid] (gen/tuple (gen/return grid)
+                                  (gen/tuple
+                                    (gen/choose 0 (dec (:rows grid)))
+                                    (gen/choose 0 (dec (:columns grid)))
+                                    )))))
+
+(def gen-maze-and-coord
+  (gen/bind gen-grid
+            (fn [grid] (gen/tuple (gen/return ((synchronous-fn (algorithm-functions "binary-tree")) grid))
+                                  (gen/tuple
+                                    (gen/choose 0 (dec (:rows grid)))
+                                    (gen/choose 0 (dec (:columns grid))))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Utility and validation functions
 
@@ -85,24 +100,24 @@
 ;; -----------------------------------------------------------------------------
 ;; Capturing asynchronous updates
 
-(defn final-grid [algorithm-fn grid]
+(defn all-updates [algorithm-fn]
   (let [intermediate-chan (async/chan)
-        result-chan (algorithm-fn grid intermediate-chan)]
-    (async/<!! (async/go-loop []
-                 (if (async/<! intermediate-chan)
-                   (recur)
-                   (async/<! result-chan))))))
-
-(defn all-grids [algorithm-fn grid]
-  (let [intermediate-chan (async/chan)
-        result-chan (algorithm-fn grid intermediate-chan)]
+        result-chan (algorithm-fn intermediate-chan)]
     (async/<!! (async/go-loop [grids []]
                  (if-let [g (async/<! intermediate-chan)]
                    (recur (conj grids g))
                    (conj grids (async/<! result-chan)))))))
 
+(defn final-update [algorithm-fn]
+  (let [intermediate-chan (async/chan)
+        result-chan (algorithm-fn intermediate-chan)]
+    (async/<!! (async/go-loop []
+                 (if (async/<! intermediate-chan)
+                   (recur)
+                   (async/<! result-chan))))))
+
 ;; -----------------------------------------------------------------------------
-;; Property definitions
+;; Property definitions for maze algorithms
 
 ;; In these definitions, some names are used consistently to help make
 ;; things clearer.
@@ -120,7 +135,7 @@
   `(defspec ~(symbol (str alg-name "-produces-a-perfect-maze"))
      5
      (prop/for-all [grid# gen-grid]
-       (let [final# (final-grid (algorithm-functions "binary-tree") grid#)
+       (let [final# (final-update (partial (algorithm-functions "binary-tree") grid#))
              links# (map :links (grid-cells final#))
              distances# ((synchronous-fn find-distances) final# [0 0])
              ]
@@ -134,7 +149,7 @@
   `(defspec ~(symbol (str alg-name "-all-cells-changed"))
      10
      (prop/for-all [grid# gen-grid]
-       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+       (let [updates# (all-updates (partial (algorithm-functions ~alg-name) grid#))
              change-sets# (filter identity (map :changed-cells updates#))
              changed-cells# (apply set/union change-sets#)]
          (= (set (grid/grid-coords grid#)) changed-cells#)))))
@@ -144,7 +159,7 @@
   `(defspec ~(symbol (str alg-name "-each-update-changes"))
      5
      (prop/for-all [grid# gen-grid]
-       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+       (let [updates# (all-updates (partial (algorithm-functions ~alg-name) grid#))
              change-sets# (map :changed-cells updates#)]
          (every? not-empty change-sets#)))))
 
@@ -154,7 +169,7 @@
   `(defspec ~(symbol (str alg-name "-each-incomplete-changes"))
      5
      (prop/for-all [grid# gen-grid]
-       (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
+       (let [incompletes# (butlast (all-updates (partial (algorithm-functions ~alg-name) grid#)))
              change-sets# (map :changed-cells incompletes#)]
          (every? not-empty change-sets#)))))
 
@@ -163,7 +178,7 @@
   `(defspec ~(symbol (str alg-name "-links-two-cells-each-update"))
      5
      (prop/for-all [grid# gen-grid]
-       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+       (let [updates# (all-updates (partial (algorithm-functions ~alg-name) grid#))
              update-change-sets# (map :changed-cells updates#)]
          (every? (fn [cs#] (= 2 (count cs#)))
                  update-change-sets#)))))
@@ -174,7 +189,7 @@
   `(defspec ~(symbol (str alg-name "-links-two-cells-each-incomplete"))
      5
      (prop/for-all [grid# gen-grid]
-       (let [incompletes# (butlast (all-grids (algorithm-functions ~alg-name) grid#))
+       (let [incompletes# (butlast (all-updates (partial (algorithm-functions ~alg-name) grid#)))
              incomplete-change-sets# (map :changed-cells incompletes#)]
          (every? (fn [cs#] (= 2 (count cs#)))
                  incomplete-change-sets#)))))
@@ -184,7 +199,7 @@
   `(defspec ~(symbol (str alg-name "-cells-changed-is-accurate"))
      5
      (prop/for-all [grid# gen-grid]
-       (let [updates# (all-grids (algorithm-functions ~alg-name) grid#)
+       (let [updates# (all-updates (partial (algorithm-functions ~alg-name) grid#))
              update-change-sets# (map :changed-cells updates#)
              actual-change-sets# (actual-change-sets (cons grid# updates#))]
          (every? (fn [[a# c#]] (= a# c#)) (partition 2 (interleave actual-change-sets# update-change-sets#)))))))
@@ -232,9 +247,122 @@
 (check-algorithm-properties "hunt-and-kill" :loose)
 (check-algorithm-properties "recursive-backtracker" :loose)
 
+;; -----------------------------------------------------------------------------
+;; Properties for analysis algorithms
+
 ;; What kinds of properties can I assert about find-distances?
 ;;
-;; * Each cell is changed exactly once
-;; * :max is monotonically increasing (starting with 1)
+;; * Each cell is changed exactly once (done)
+;; * :max always increases by 1 (starting with 1)
 ;; * Each step, every changed cell has distance :max
 ;; * (maybe) if no intermediate-chan, the result grid shows all cells changed
+;;
+;; Do I need to run these properties against mazes generated by all of the
+;; different algorithms?  I would say not, because if they're all perfect
+;; mazes, the biases etc. in the mazes won't make a difference.
+
+(defspec find-distances-changes-each-cell-exactly-once
+  10
+  (prop/for-all [[grid start-coord] gen-grid-and-coord]
+    (let [maze (final-update (partial (algorithm-functions "binary-tree") grid))
+          updates (all-updates (partial find-distances maze start-coord))
+          change-sets (filter identity (map :changed-cells updates))
+          change-appearances (conj (apply concat change-sets) start-coord)
+          change-counts (group-by identity change-appearances)]
+      (every? #(= 1 (count %)) (vals change-counts))
+      (= (set (grid/grid-coords grid))
+         (set (keys change-counts))))))
+
+(defspec find-distances-each-intermediate-changes
+  5
+  (prop/for-all [[grid start-coord] gen-grid-and-coord]
+    (let [maze (final-update (partial (algorithm-functions "binary-tree") grid))
+          intermediates (butlast (all-updates (partial find-distances maze start-coord)))
+          change-sets (map :changed-cells intermediates)]
+      (every? not-empty change-sets))))
+
+;;; I thought this was failing just because there's a redundant update at the
+;;; end.  But no ... filtered that out, and apparently sometimes max increases
+;;; by 2.
+;(defspec find-distances-max-advances-by-1
+;  10
+;  (prop/for-all [[maze start-coord] gen-maze-and-coord]
+;    (let [intermediates (butlast (all-updates (partial find-distances maze start-coord)))
+;          maxes (map :max intermediates)
+;          diffs (map (fn [[a b]] (- b a)) (partition 2 (interleave maxes (rest maxes))))]
+;      (println (str "maxes: " (vec maxes)))
+;      (println (str "diffs: " (vec diffs)))
+;      (every? #(= 1 %)
+;              (map (fn [[a b]] (- b a)) (partition 2 (interleave maxes (rest maxes))))))))
+
+;; Both of the following mazes, with start coordinate [0 0], cause
+;; find-distances to report :max values [1 2 3 4 5 7], skipping 6.
+;; Note that in both cases, the two changed cells are linked to each other,
+;; so that they can't have the same distance.  This makes me think we're
+;; missing a begin-step somewhere.
+
+(comment
+  {:type :Grid
+   :algorithm-name "binary-tree"
+   :rows 5
+   :columns 3
+   :cells [{:type :Cell, :coord [0 0], :north nil, :south [1 0], :east [0 1], :west nil, :links #{[1 0] [0 1]}}
+           {:type :Cell, :coord [0 1], :north nil, :south [1 1], :east [0 2], :west [0 0], :links #{[0 0] [0 2]}}
+           {:type :Cell, :coord [0 2], :north nil, :south [1 2], :east nil, :west [0 1], :links #{[1 2] [0 1]}}
+           {:type :Cell, :coord [1 0], :north [0 0], :south [2 0], :east [1 1], :west nil, :links #{[0 0] [2 0]}}
+           {:type :Cell, :coord [1 1], :north [0 1], :south [2 1], :east [1 2], :west [1 0], :links #{[2 1] [1 2]}}
+           {:type :Cell, :coord [1 2], :north [0 2], :south [2 2], :east nil, :west [1 1], :links #{[2 2] [1 1] [0 2]}}
+           {:type :Cell, :coord [2 0], :north [1 0], :south [3 0], :east [2 1], :west nil, :links #{[1 0]}}
+           {:type :Cell, :coord [2 1], :north [1 1], :south [3 1], :east [2 2], :west [2 0], :links #{[1 1]}}
+           {:type :Cell, :coord [2 2], :north [1 2], :south [3 2], :east nil, :west [2 1], :links #{[1 2] [3 2]}}
+           {:type :Cell, :coord [3 0], :north [2 0], :south [4 0], :east [3 1], :west nil, :links #{[3 1] [4 0]}}
+           {:type :Cell, :coord [3 1], :north [2 1], :south [4 1], :east [3 2], :west [3 0], :links #{[3 0] [4 1] [3 2]}}
+           {:type :Cell, :coord [3 2], :north [2 2], :south [4 2], :east nil, :west [3 1], :links #{[2 2] [4 2] [3 1]}}
+           {:type :Cell, :coord [4 0], :north [3 0], :south nil, :east [4 1], :west nil, :links #{[3 0]}}
+           {:type :Cell, :coord [4 1], :north [3 1], :south nil, :east [4 2], :west [4 0], :links #{[3 1]}}
+           {:type :Cell, :coord [4 2], :north [3 2], :south nil, :east nil, :west [4 1], :links #{[3 2]}}
+           ]
+   :changed-cells #{[4 2] [3 2]}
+   }
+  ;; +---+---+---+
+  ;; |           |
+  ;; +   +---+   +
+  ;; |   |       |
+  ;; +   +   +   +
+  ;; |   |   |   |
+  ;; +---+---+   +
+  ;; |           |
+  ;; +   +   +   +
+  ;; |   |   |   |
+  ;; +---+---+---+
+
+  {:type :Grid
+   :algorithm-name "binary-tree"
+   :rows 4
+   :columns 3
+   :cells [{:type :Cell, :coord [0 0], :north nil, :south [1 0], :east [0 1], :west nil, :links #{[1 0] [0 1]}}
+           {:type :Cell, :coord [0 1], :north nil, :south [1 1], :east [0 2], :west [0 0], :links #{[0 0] [1 1] [0 2]}}
+           {:type :Cell, :coord [0 2], :north nil, :south [1 2], :east nil, :west [0 1], :links #{[1 2] [0 1]}}
+           {:type :Cell, :coord [1 0], :north [0 0], :south [2 0], :east [1 1], :west nil, :links #{[0 0]}}
+           {:type :Cell, :coord [1 1], :north [0 1], :south [2 1], :east [1 2], :west [1 0], :links #{[0 1]}}
+           {:type :Cell, :coord [1 2], :north [0 2], :south [2 2], :east nil, :west [1 1], :links #{[2 2] [0 2]}}
+           {:type :Cell, :coord [2 0], :north [1 0], :south [3 0], :east [2 1], :west nil, :links #{[2 1]}}
+           {:type :Cell, :coord [2 1], :north [1 1], :south [3 1], :east [2 2], :west [2 0], :links #{[2 2] [2 0] [3 1]}}
+           {:type :Cell, :coord [2 2], :north [1 2], :south [3 2], :east nil, :west [2 1], :links #{[2 1] [1 2] [3 2]}}
+           {:type :Cell, :coord [3 0], :north [2 0], :south nil, :east [3 1], :west nil, :links #{[3 1]}}
+           {:type :Cell, :coord [3 1], :north [2 1], :south nil, :east [3 2], :west [3 0], :links #{[3 0] [2 1]}}
+           {:type :Cell, :coord [3 2], :north [2 2], :south nil, :east nil, :west [3 1], :links #{[2 2]}}
+           ]
+   :changed-cells #{[2 2] [3 2]}
+   }
+  ;; +---+---+---+
+  ;; |           |
+  ;; +   +   +   +
+  ;; |   |   |   |
+  ;; +---+---+   +
+  ;; |           |
+  ;; +---+   +   +
+  ;; |       |   |
+  ;; +---+---+---+
+
+  )

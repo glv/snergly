@@ -3,9 +3,10 @@
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
   (:require #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async])
-            [schema.core :as s :include-macros true]
-            [snergly.grid :as g]
-            [snergly.util :as util]))
+                    [schema.core :as s :include-macros true]
+                    [snergly.grid :as g]
+                    [snergly.util :as util]
+                    [snergly.grid :as grid]))
 
 ;; When adding a new algorithm, also add it to algorithm-functions below.
 (def algorithm-names
@@ -39,26 +40,17 @@
 ;; have the algorithm name as a name prefix (for example,
 ;; sidewinder-step).
 
-(defn binary-tree-step [grid coord]
-  (let [cell (g/grid-cell grid coord)
-        neighbors (g/cell-neighbors cell [:north :east])]
-    (if (empty? neighbors)
-      grid
-      (g/link-cells grid cell (rand-nth neighbors)))))
-
-(s/defn maze-binary-tree
-  ([grid :- g/Grid] (maze-binary-tree grid nil))
-  ([grid :- g/Grid result-chan]
-    (go-loop [grid (assoc grid :algorithm-name "binary-tree")
-              [coord & coords] (g/grid-coords grid)]
-             (if-not coord
-               (do
-                 (when result-chan (async/close! result-chan))
-                 grid)
-               (do
-                 (when (and result-chan (g/changed? grid))
-                   (async/>! result-chan grid))
-                 (recur (binary-tree-step (g/begin-step grid) coord) coords))))))
+(defn seq-binary-tree
+  ([grid]
+    (lazy-seq (cons grid (seq-binary-tree (assoc grid :changed-cells #{}) (g/grid-coords grid)))))
+  ([grid [coord & coords]]
+    (when coord
+      (let [cell (g/grid-cell grid coord)
+            neighbors (g/cell-neighbors cell [:north :east])
+            next-grid (if (empty? neighbors)
+                        grid
+                        (g/link-cells grid cell (rand-nth neighbors)))]
+        (lazy-seq (cons next-grid (seq-binary-tree (g/begin-step next-grid) coords)))))))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (:east cell))
@@ -252,7 +244,7 @@
     result-chan]
     (go-loop [distances (g/make-distances start)
               current start
-              frontier #?(:clj PersistentQueue/EMPTY
+              frontier #?(:clj  PersistentQueue/EMPTY
                           :cljs #queue [])]
       (let [cell (g/grid-cell grid current)
             current-distance (distances current)
@@ -273,7 +265,7 @@
                    ;; condition.
                    (let [new-distances (g/add-distances distances links (inc current-distance))
                          new-distances (if (and result-chan
-                                                (g/changed? new-distances)
+                                                (g/changed? new-distances) ; always true, because we just changed it.
                                                 (> (new-distances (peek next-frontier)) current-distance))
                                          (do (async/>! result-chan new-distances)
                                              (g/begin-step new-distances))
@@ -298,11 +290,37 @@
                                       (:links (g/grid-cell grid current))))]
           (recur neighbor (assoc breadcrumbs neighbor (distances neighbor))))))))
 
+;; once I convert all of the algorithms to lazy sequence generators, this can
+;; collapse to something like this:
+;;
+;; (defn async-from-seq [seq-algorithm]
+;;   (fn [grid]
+;;     (spool (seq-algorithm grid)
+;;            (async/chan nil (comp (dedupe) (filter grid/changed?))))))
+;;
+;; and, similarly, synchronous-fn can simply become:
+;;
+;; (defn synchronous-fn [seq-algorithm]
+;;   (fn [grid]
+;;     (first (take-last 1 (seq-algorithm grid)))))
+;;
+(defn async-from-seq [seq-algorithm]
+  (fn [grid result-chan]
+    (go-loop [[grid & grids] (sequence (comp (dedupe) (filter  grid/changed?)) (seq-algorithm grid))]
+             (if (empty? grids)
+               (do
+                 (when result-chan (async/close! result-chan))
+                 grid)
+               (recur
+                 (do
+                   (when result-chan (async/>! result-chan grid))
+                   grids))))))
+
 ;; I was finding the maze function with (resolve (symbol (str "maze-" name))).
 ;; But apparently ClojureScript namespaces aren't as reflective as Clojure, so
 ;; I have to have a map.
 (def algorithm-functions
-  {"binary-tree" maze-binary-tree
+  {"binary-tree" (async-from-seq seq-binary-tree)
    "sidewinder" maze-sidewinder
    "aldous-broder" maze-aldous-broder
    "wilsons" maze-wilsons
@@ -338,4 +356,15 @@
                                   {:label (g/xform-values util/base36 analysis)
                                    :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)}))))
      )
+   )
+
+#?(:clj
+   (defn runall [algorithm-fn]
+     (let [intermediate-chan (async/chan)
+           result-chan (algorithm-fn intermediate-chan)]
+       (do (async/<!! (async/go-loop []
+                        (if (async/<! intermediate-chan)
+                          (recur)
+                          (async/<! result-chan))))
+           "Done.")))
    )
