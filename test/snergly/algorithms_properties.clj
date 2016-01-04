@@ -242,8 +242,8 @@
 (check-algorithm-properties "binary-tree")
 (check-algorithm-properties "sidewinder")
 (check-algorithm-properties "wilsons")
+(check-algorithm-properties "aldous-broder")
 ;; The following can't pass :each-changes because the last update might be a duplicate.
-(check-algorithm-properties "aldous-broder" :loose)
 (check-algorithm-properties "hunt-and-kill" :loose)
 (check-algorithm-properties "recursive-backtracker" :loose)
 

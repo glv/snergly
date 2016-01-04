@@ -84,31 +84,25 @@
   ([grid [coord & coords] current-run]
    (when-not (nil? coord)
      (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
-       (lazy-seq (cons new-grid (seq-sidewinder (g/begin-step new-grid) coords (conj processed-run (first coords))
-         )
-       ))))))
+       (lazy-seq (cons new-grid (seq-sidewinder (g/begin-step new-grid) coords (conj processed-run (first coords)))))))))
 
-(s/defn maze-aldous-broder
-  ([grid :- g/Grid] (maze-aldous-broder grid nil))
-  ([grid :- g/Grid result-chan]
-    (go-loop [grid (assoc (g/begin-step grid) :algorithm-name "aldous-broder")
-              current (g/random-coord grid)
-              unvisited (dec (g/grid-size grid))]
+(defn seq-aldous-broder
+  ([grid]
+    (lazy-seq (cons grid (seq-aldous-broder (g/begin-step grid)
+                                            (g/random-coord grid)
+                                            (dec (g/grid-size grid))))))
+  ([grid current unvisited]
+    (if (= unvisited 0)
+      (list grid)
       (let [cell (g/grid-cell grid current)
             neighbor (rand-nth (g/cell-neighbors cell))
-            neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))]
-        (if (= unvisited 0)
-          (do
-            (when result-chan (async/close! result-chan))
-            grid)
-          (recur (g/begin-step (if neighbor-new?
-                                 (let [new-grid (g/link-cells grid cell neighbor)]
-                                   (when (and result-chan (g/changed? new-grid))
-                                     (async/>! result-chan new-grid))
-                                   new-grid)
-                                 grid))
-                 neighbor
-                 (if neighbor-new? (dec unvisited) unvisited)))))))
+            neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))
+            new-grid (if neighbor-new?
+                       (g/link-cells grid cell neighbor)
+                       grid)]
+        (lazy-seq (cons new-grid (seq-aldous-broder (g/begin-step new-grid)
+                                                    neighbor
+                                                    (if neighbor-new? (dec unvisited) unvisited))))))))
 
 (defn wilsons-loop-erased-walk [grid start-coord unvisited]
   (let [unvisited-set (set unvisited)]
@@ -318,9 +312,9 @@
 ;; I have to have a map.
 (def algorithm-functions
   {"binary-tree" (async-from-seq seq-binary-tree)
-   ;"sidewinder" maze-sidewinder
    "sidewinder" (async-from-seq seq-sidewinder)
-   "aldous-broder" maze-aldous-broder
+   ;"aldous-broder" maze-aldous-broder
+   "aldous-broder" (async-from-seq seq-aldous-broder)
    "wilsons" maze-wilsons
    "hunt-and-kill" maze-hunt-and-kill
    "recursive-backtracker" maze-recursive-backtracker})
