@@ -74,22 +74,19 @@
                    (g/link-cells grid cell (:east cell)))]
     [new-grid (if end-run? [] run)]))
 
-(s/defn maze-sidewinder
-  ([grid :- g/Grid] (maze-sidewinder grid nil))
-  ([grid :- g/Grid result-chan]
-    (go-loop [grid (assoc grid :algorithm-name "sidewinder")
-              [coord & coords] (g/grid-coords grid)
-              current-run [coord]]
-             (when (and result-chan (g/changed? grid))
-               (async/>! result-chan grid))
-      (let [[new-grid processed-run] (sidewinder-step (g/begin-step grid) coord current-run)]
-        (if (empty? coords)
-          (do
-            (when result-chan (async/close! result-chan))
-            new-grid)
-          (recur new-grid
-                 coords
-                 (conj processed-run (first coords))))))))
+;; I really should have the single-arity function as just maze-sidewinder,
+;; and then the others as maze-sidewinder*
+(defn seq-sidewinder
+  ([grid]
+   (lazy-seq (cons grid (seq-sidewinder (assoc grid :changed-cells #{}) (g/grid-coords grid)))))
+  ([grid coords]
+   (seq-sidewinder grid coords [(first coords)]))
+  ([grid [coord & coords] current-run]
+   (when-not (nil? coord)
+     (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
+       (lazy-seq (cons new-grid (seq-sidewinder (g/begin-step new-grid) coords (conj processed-run (first coords))
+         )
+       ))))))
 
 (s/defn maze-aldous-broder
   ([grid :- g/Grid] (maze-aldous-broder grid nil))
@@ -321,7 +318,8 @@
 ;; I have to have a map.
 (def algorithm-functions
   {"binary-tree" (async-from-seq seq-binary-tree)
-   "sidewinder" maze-sidewinder
+   ;"sidewinder" maze-sidewinder
+   "sidewinder" (async-from-seq seq-sidewinder)
    "aldous-broder" maze-aldous-broder
    "wilsons" maze-wilsons
    "hunt-and-kill" maze-hunt-and-kill
