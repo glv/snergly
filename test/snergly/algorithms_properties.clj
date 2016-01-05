@@ -163,16 +163,6 @@
              change-sets# (map :changed-cells updates#)]
          (every? not-empty change-sets#)))))
 
-;; Do all incompletes actually change the grid?
-;; (A looser version of each-update-changes allowing a redundant final update)
-(defmacro check-algorithm-each-incomplete-changes [alg-name]
-  `(defspec ~(symbol (str alg-name "-each-incomplete-changes"))
-     5
-     (prop/for-all [grid# gen-grid]
-       (let [incompletes# (butlast (all-updates (partial (algorithm-functions ~alg-name) grid#)))
-             change-sets# (map :changed-cells incompletes#)]
-         (every? not-empty change-sets#)))))
-
 ;; Does each update link exactly two cells?
 (defmacro check-algorithm-updates-link-2 [alg-name]
   `(defspec ~(symbol (str alg-name "-links-two-cells-each-update"))
@@ -182,17 +172,6 @@
              update-change-sets# (map :changed-cells updates#)]
          (every? (fn [cs#] (= 2 (count cs#)))
                  update-change-sets#)))))
-
-;; Does each incomplete link exactly two cells?
-;; (A looser version of updates-link-2 allowing a redundant final update)
-(defmacro check-algorithm-incompletes-link-2 [alg-name]
-  `(defspec ~(symbol (str alg-name "-links-two-cells-each-incomplete"))
-     5
-     (prop/for-all [grid# gen-grid]
-       (let [incompletes# (butlast (all-updates (partial (algorithm-functions ~alg-name) grid#)))
-             incomplete-change-sets# (map :changed-cells incompletes#)]
-         (every? (fn [cs#] (= 2 (count cs#)))
-                 incomplete-change-sets#)))))
 
 ;; Is each update's :changed-cells set accurate?
 (defmacro check-algorithm-cells-changed-is-accurate [alg-name]
@@ -209,7 +188,6 @@
 
   (let [specs (cond
                 (empty? specs)     #{:perfect :all-changed :accurate-changes :each-update-changes :updates-link-2}
-                (= [:loose] specs) #{:perfect :all-changed :accurate-changes :each-incomplete-changes :incompletes-link-2}
                 :else              (set specs))]
     `(do
        (when (contains? ~specs :perfect)
@@ -221,14 +199,8 @@
        (when (contains? ~specs :each-update-changes)
          (check-algorithm-each-update-changes ~alg-name))
 
-       (when (contains? ~specs :each-incomplete-changes)
-         (check-algorithm-each-incomplete-changes ~alg-name))
-
        (when (contains? ~specs :updates-link-2)
          (check-algorithm-updates-link-2 ~alg-name))
-
-       (when (contains? ~specs :incompletes-link-2)
-         (check-algorithm-incompletes-link-2 ~alg-name))
 
        (when (contains? ~specs :accurate-changes)
          (check-algorithm-cells-changed-is-accurate ~alg-name))
@@ -244,8 +216,7 @@
 (check-algorithm-properties "wilsons")
 (check-algorithm-properties "aldous-broder")
 (check-algorithm-properties "hunt-and-kill")
-;; The following can't pass :each-changes because the last update might be a duplicate.
-(check-algorithm-properties "recursive-backtracker" :loose)
+(check-algorithm-properties "recursive-backtracker")
 
 ;; -----------------------------------------------------------------------------
 ;; Properties for analysis algorithms

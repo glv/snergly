@@ -219,19 +219,13 @@
         [(g/link-cells grid current-cell next-current)
          (conj stack next-current)]))))
 
-(s/defn maze-recursive-backtracker
-  ([grid :- g/Grid] (maze-recursive-backtracker grid nil))
-  ([grid :- g/Grid result-chan]
-    (go-loop [grid (assoc grid :algorithm-name "recursive-backtracker")
-              stack (list (g/random-coord grid))]
-             (if (empty? stack)
-               (do
-                 (when result-chan (async/close! result-chan))
-                 grid)
-               (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
-                 (when (and result-chan (g/changed? grid))
-                   (async/>! result-chan grid))
-                 (recur new-grid new-stack))))))
+(defn seq-recursive-backtracker
+  ([grid] (lazy-seq (cons grid (seq-recursive-backtracker (g/begin-step (assoc grid :algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))))
+  ([grid stack]
+   (if (empty? stack)
+     (list grid)
+     (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
+       (lazy-seq (cons new-grid (seq-recursive-backtracker (g/begin-step new-grid) new-stack)))))))
 
 (s/defn find-distances
   ([grid :- g/Grid start :- g/CellPosition] (find-distances grid start nil))
@@ -320,9 +314,9 @@
    "sidewinder" (async-from-seq seq-sidewinder)
    "aldous-broder" (async-from-seq seq-aldous-broder)
    "wilsons" maze-wilsons
-   ;"hunt-and-kill" maze-hunt-and-kill
    "hunt-and-kill" (async-from-seq seq-hunt-and-kill)
-   "recursive-backtracker" maze-recursive-backtracker})
+   "recursive-backtracker" (async-from-seq seq-recursive-backtracker)
+   })
 
 #?(:clj
    (defn synchronous-fn [func]
