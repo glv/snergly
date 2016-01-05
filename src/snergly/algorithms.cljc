@@ -42,7 +42,7 @@
 
 (defn seq-binary-tree
   ([grid]
-    (lazy-seq (cons grid (seq-binary-tree (assoc grid :changed-cells #{}) (g/grid-coords grid)))))
+    (lazy-seq (cons grid (seq-binary-tree (g/begin-step (assoc grid :algorithm-name "binary-tree")) (g/grid-coords grid)))))
   ([grid [coord & coords]]
     (when coord
       (let [cell (g/grid-cell grid coord)
@@ -78,7 +78,7 @@
 ;; and then the others as maze-sidewinder*
 (defn seq-sidewinder
   ([grid]
-   (lazy-seq (cons grid (seq-sidewinder (assoc grid :changed-cells #{}) (g/grid-coords grid)))))
+   (lazy-seq (cons grid (seq-sidewinder (g/begin-step (assoc grid :algorithm-name "sidewinder")) (g/grid-coords grid)))))
   ([grid coords]
    (seq-sidewinder grid coords [(first coords)]))
   ([grid [coord & coords] current-run]
@@ -88,7 +88,7 @@
 
 (defn seq-aldous-broder
   ([grid]
-    (lazy-seq (cons grid (seq-aldous-broder (g/begin-step grid)
+    (lazy-seq (cons grid (seq-aldous-broder (g/begin-step (assoc grid :algorithm-name "aldous-broder"))
                                             (g/random-coord grid)
                                             (dec (g/grid-size grid))))))
   ([grid current unvisited]
@@ -160,6 +160,25 @@
                         new-unvisited
                         (rand-nth new-unvisited)))))))
 
+;(defn seq-wilsons
+;  ([grid]
+;    (let [unvisited (rest (shuffle (g/grid-coords grid)))
+;          coord (rand-nth unvisited)]
+;      (lazy-seq (cons grid (seq-wilsons (g/begin-step (assoc grid :algorithm-name "wilsons"))
+;                                        unvisited
+;                                        coord)))))
+;  ([grid unvisited coord]
+;   (let [path (wilsons-loop-erased-walk grid coord unvisited)
+;;        ;; because this algorithm first finds a path and then carves
+;;        ;; it out as separate steps, it would be good to have
+;;        ;; wilsons-loop-erased-walk also animate the path-finding,
+;;        ;; perhaps by annotating the path cells with a color.
+;         [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited)]
+;     (if (empty? new-unvisited)
+;       (list new-grid)
+;       (lazy-seq (cons new-grid (seq-wilsons (g/begin-step grid))))))
+;    ))
+
 (defn hunt-and-kill-start-new-walk [grid]
   (loop [[current-coord & other-coords] (g/grid-coords grid)]
     (let [current-cell (g/grid-cell grid current-coord)
@@ -180,27 +199,13 @@
         [(g/link-cells grid current-cell neighbor)
          neighbor]))))
 
-(s/defn maze-hunt-and-kill
-  ([grid :- g/Grid] (maze-hunt-and-kill grid nil))
-  ([grid :- g/Grid result-chan]
-    (go-loop [grid (assoc grid :algorithm-name "hunt-and-kill")
-              current-coord (g/random-coord grid)]
-      (let [[new-grid next-coord] (hunt-and-kill-step (g/begin-step grid) current-coord)]
-        ;; at this point, new-grid may or may not have been changed.
-        ;;                new-grid may or may not be the final.
-        ;; The only simple way to deal with this, I think, is to rework these
-        ;; algorithms so that they send all of their results through a single
-        ;; channel (rather than intermediate results through one and the final
-        ;; through another) and then put a transducer on that channel that
-        ;; filters everything that's not changed.
-        (if-not next-coord
-          (do
-            (when result-chan (async/close! result-chan))
-            new-grid)
-          (do
-            (when (and result-chan (g/changed? new-grid))
-              (async/>! result-chan new-grid))
-            (recur new-grid next-coord)))))))
+(defn seq-hunt-and-kill
+  ([grid] (lazy-seq (cons grid (seq-hunt-and-kill (g/begin-step (assoc grid :algorithm-name "hunt-and-kill")) (g/random-coord grid)))))
+  ([grid current-coord]
+   (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
+     (if-not next-coord
+       (list new-grid)
+       (lazy-seq (cons new-grid (seq-hunt-and-kill (g/begin-step new-grid) next-coord)))))))
 
 (defn recursive-backtracker-step [grid stack]
   (let [grid (g/begin-step grid)
@@ -313,10 +318,10 @@
 (def algorithm-functions
   {"binary-tree" (async-from-seq seq-binary-tree)
    "sidewinder" (async-from-seq seq-sidewinder)
-   ;"aldous-broder" maze-aldous-broder
    "aldous-broder" (async-from-seq seq-aldous-broder)
    "wilsons" maze-wilsons
-   "hunt-and-kill" maze-hunt-and-kill
+   ;"hunt-and-kill" maze-hunt-and-kill
+   "hunt-and-kill" (async-from-seq seq-hunt-and-kill)
    "recursive-backtracker" maze-recursive-backtracker})
 
 #?(:clj
