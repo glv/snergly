@@ -112,72 +112,30 @@
         path
         (let [next-coord (rand-nth (g/cell-neighbors (g/grid-cell grid current-coord)))
               position (#?(:clj .indexOf :cljs cljs-index-of) path next-coord)]
-          ;; in order to animate doing the walk in addition to actually carving
-          ;; the path, we would need to pass in result-chan here, include the
-          ;; grid in the recur *and* the return value, and at this point update
-          ;; the color of current-coord and, if result-chan, put the updated
-          ;; grid onto result-chan.  (Oh, and also we'd have to have conditional
-          ;; code for setting the color in both the cljs and clj ways, and we'd
-          ;; have to update wilsons-carve-passage to erase the cell color from
-          ;; each cell as it carves the path.)  Hardly seems worth it.
           (recur next-coord
                  (if (neg? position)
                    (conj path next-coord)
                    (subvec path 0 (inc position)))))))))
 
-(defn wilsons-carve-passage [grid path unvisited result-chan]
-  (go-loop [grid grid
-            unvisited unvisited
-            [[coord1 coord2] & pairs] (partition 2 1 path)]
-           (when (and result-chan (g/changed? grid))
-             (async/>! result-chan grid))
-    (let [new-grid (g/link-cells (g/begin-step grid) (g/grid-cell grid coord1) coord2)
-          new-unvisited (remove (partial = coord1) unvisited)]
-      (if (empty? pairs)
-        [new-grid new-unvisited]
-        (recur new-grid
-               new-unvisited
-               pairs)))))
+(declare seq-wilsons)
 
-(s/defn maze-wilsons
-  ([grid :- g/Grid] (maze-wilsons grid nil))
-  ([grid :- g/Grid result-chan]
-    (go-loop [grid (assoc grid :algorithm-name "wilsons")
-              unvisited (rest (shuffle (g/grid-coords grid)))
-              coord (rand-nth unvisited)]
-             (let [path (wilsons-loop-erased-walk grid coord unvisited)
-                   ;; because this algorithm first finds a path and then carves
-                   ;; it out as separate steps, it would be good to have
-                   ;; wilsons-loop-erased-walk also animate the path-finding,
-                   ;; perhaps by annotating the path cells with a color.
-                   path-chan (wilsons-carve-passage grid path unvisited result-chan)
-                   [new-grid new-unvisited] (async/<! path-chan)]
-               (if (empty? new-unvisited)
-                 (do
-                   (when result-chan (async/close! result-chan))
-                   new-grid)
-                 (recur new-grid
-                        new-unvisited
-                        (rand-nth new-unvisited)))))))
+(defn wilsons-carve-passage [grid unvisited [[coord1 coord2] & pairs]]
+  (let [new-grid (g/link-cells grid (g/grid-cell grid coord1) coord2)
+        new-unvisited (remove (partial = coord1) unvisited)]
+    (if (empty? pairs)
+      (lazy-seq (cons new-grid (seq-wilsons (g/begin-step new-grid) new-unvisited)))
+      (lazy-seq (cons new-grid (wilsons-carve-passage (g/begin-step new-grid) new-unvisited pairs))))))
 
-;(defn seq-wilsons
-;  ([grid]
-;    (let [unvisited (rest (shuffle (g/grid-coords grid)))
-;          coord (rand-nth unvisited)]
-;      (lazy-seq (cons grid (seq-wilsons (g/begin-step (assoc grid :algorithm-name "wilsons"))
-;                                        unvisited
-;                                        coord)))))
-;  ([grid unvisited coord]
-;   (let [path (wilsons-loop-erased-walk grid coord unvisited)
-;;        ;; because this algorithm first finds a path and then carves
-;;        ;; it out as separate steps, it would be good to have
-;;        ;; wilsons-loop-erased-walk also animate the path-finding,
-;;        ;; perhaps by annotating the path cells with a color.
-;         [new-grid new-unvisited] (wilsons-carve-passage grid path unvisited)]
-;     (if (empty? new-unvisited)
-;       (list new-grid)
-;       (lazy-seq (cons new-grid (seq-wilsons (g/begin-step grid))))))
-;    ))
+(defn seq-wilsons
+  ([grid]
+   (lazy-seq (cons grid (seq-wilsons (g/begin-step (assoc grid :algorithm-name "wilsons"))
+                                     (rest (shuffle (g/grid-coords grid)))))))
+  ([grid unvisited]
+   (if (empty? unvisited)
+     nil
+     (let [coord (rand-nth unvisited)
+           path (wilsons-loop-erased-walk grid coord unvisited)]
+       (wilsons-carve-passage grid unvisited (partition 2 1 path))))))
 
 (defn hunt-and-kill-start-new-walk [grid]
   (loop [[current-coord & other-coords] (g/grid-coords grid)]
@@ -294,6 +252,15 @@
 ;;   (fn [grid]
 ;;     (first (take-last 1 (seq-algorithm grid)))))
 ;;
+;; However ... it would be easy for a bunch of inefficiency to hide in this
+;; process, with the sequences including many redundant updates that get
+;; filtered out.  So it would be good to have a custom version of the
+;; transducer here:
+;;
+;;     (comp (dedupe) (filter grid/changed?))
+;;
+;; that would count how many elements get filtered.
+;;
 (defn async-from-seq [seq-algorithm]
   (fn [grid result-chan]
     (go-loop [[grid & grids] (sequence (comp (dedupe) (filter  grid/changed?)) (seq-algorithm grid))]
@@ -313,7 +280,7 @@
   {"binary-tree" (async-from-seq seq-binary-tree)
    "sidewinder" (async-from-seq seq-sidewinder)
    "aldous-broder" (async-from-seq seq-aldous-broder)
-   "wilsons" maze-wilsons
+   "wilsons" (async-from-seq seq-wilsons)
    "hunt-and-kill" (async-from-seq seq-hunt-and-kill)
    "recursive-backtracker" (async-from-seq seq-recursive-backtracker)
    })
