@@ -53,7 +53,7 @@
 
 (def gen-maze-and-coord
   (gen/bind gen-grid
-            (fn [grid] (gen/tuple (gen/return ((synchronous-fn (algorithm-functions "binary-tree")) grid))
+            (fn [grid] (gen/tuple (gen/return (first (take-last 1 (seq-binary-tree grid))))
                                   (gen/tuple
                                     (gen/choose 0 (dec (:rows grid)))
                                     (gen/choose 0 (dec (:columns grid))))))))
@@ -95,7 +95,7 @@
             {:pre [(and (= (:rows a) (:rows b))
                         (= (:columns a) (:columns b)))]}
             (set (filter (partial cell-changed? a b) (grid/grid-coords a))))]
-    (map changed-cells (partition 2 (interleave grids (rest grids))))))
+    (map changed-cells (partition 2 1 grids))))
 
 ;; -----------------------------------------------------------------------------
 ;; Capturing asynchronous updates
@@ -252,88 +252,13 @@
           change-sets (map :changed-cells intermediates)]
       (every? not-empty change-sets))))
 
-;;; I thought this was failing just because there's a redundant update at the
-;;; end.  But no ... filtered that out, and apparently sometimes max increases
-;;; by 2.
-;(defspec find-distances-max-advances-by-1
-;  10
-;  (prop/for-all [[maze start-coord] gen-maze-and-coord]
-;    (let [intermediates (butlast (all-updates (partial find-distances maze start-coord)))
-;          maxes (map :max intermediates)
-;          diffs (map (fn [[a b]] (- b a)) (partition 2 (interleave maxes (rest maxes))))]
-;      (println (str "maxes: " (vec maxes)))
-;      (println (str "diffs: " (vec diffs)))
-;      (every? #(= 1 %)
-;              (map (fn [[a b]] (- b a)) (partition 2 (interleave maxes (rest maxes))))))))
-
-;; Both of the following mazes, with start coordinate [0 0], cause
-;; find-distances to report :max values [1 2 3 4 5 7], skipping 6.
-;; Note that in both cases, the two changed cells are linked to each other,
-;; so that they can't have the same distance.  This makes me think we're
-;; missing a begin-step somewhere.
-
-(comment
-  {:type :Grid
-   :algorithm-name "binary-tree"
-   :rows 5
-   :columns 3
-   :cells [{:type :Cell, :coord [0 0], :north nil, :south [1 0], :east [0 1], :west nil, :links #{[1 0] [0 1]}}
-           {:type :Cell, :coord [0 1], :north nil, :south [1 1], :east [0 2], :west [0 0], :links #{[0 0] [0 2]}}
-           {:type :Cell, :coord [0 2], :north nil, :south [1 2], :east nil, :west [0 1], :links #{[1 2] [0 1]}}
-           {:type :Cell, :coord [1 0], :north [0 0], :south [2 0], :east [1 1], :west nil, :links #{[0 0] [2 0]}}
-           {:type :Cell, :coord [1 1], :north [0 1], :south [2 1], :east [1 2], :west [1 0], :links #{[2 1] [1 2]}}
-           {:type :Cell, :coord [1 2], :north [0 2], :south [2 2], :east nil, :west [1 1], :links #{[2 2] [1 1] [0 2]}}
-           {:type :Cell, :coord [2 0], :north [1 0], :south [3 0], :east [2 1], :west nil, :links #{[1 0]}}
-           {:type :Cell, :coord [2 1], :north [1 1], :south [3 1], :east [2 2], :west [2 0], :links #{[1 1]}}
-           {:type :Cell, :coord [2 2], :north [1 2], :south [3 2], :east nil, :west [2 1], :links #{[1 2] [3 2]}}
-           {:type :Cell, :coord [3 0], :north [2 0], :south [4 0], :east [3 1], :west nil, :links #{[3 1] [4 0]}}
-           {:type :Cell, :coord [3 1], :north [2 1], :south [4 1], :east [3 2], :west [3 0], :links #{[3 0] [4 1] [3 2]}}
-           {:type :Cell, :coord [3 2], :north [2 2], :south [4 2], :east nil, :west [3 1], :links #{[2 2] [4 2] [3 1]}}
-           {:type :Cell, :coord [4 0], :north [3 0], :south nil, :east [4 1], :west nil, :links #{[3 0]}}
-           {:type :Cell, :coord [4 1], :north [3 1], :south nil, :east [4 2], :west [4 0], :links #{[3 1]}}
-           {:type :Cell, :coord [4 2], :north [3 2], :south nil, :east nil, :west [4 1], :links #{[3 2]}}
-           ]
-   :changed-cells #{[4 2] [3 2]}
-   }
-  ;; +---+---+---+
-  ;; |           |
-  ;; +   +---+   +
-  ;; |   |       |
-  ;; +   +   +   +
-  ;; |   |   |   |
-  ;; +---+---+   +
-  ;; |           |
-  ;; +   +   +   +
-  ;; |   |   |   |
-  ;; +---+---+---+
-
-  {:type :Grid
-   :algorithm-name "binary-tree"
-   :rows 4
-   :columns 3
-   :cells [{:type :Cell, :coord [0 0], :north nil, :south [1 0], :east [0 1], :west nil, :links #{[1 0] [0 1]}}
-           {:type :Cell, :coord [0 1], :north nil, :south [1 1], :east [0 2], :west [0 0], :links #{[0 0] [1 1] [0 2]}}
-           {:type :Cell, :coord [0 2], :north nil, :south [1 2], :east nil, :west [0 1], :links #{[1 2] [0 1]}}
-           {:type :Cell, :coord [1 0], :north [0 0], :south [2 0], :east [1 1], :west nil, :links #{[0 0]}}
-           {:type :Cell, :coord [1 1], :north [0 1], :south [2 1], :east [1 2], :west [1 0], :links #{[0 1]}}
-           {:type :Cell, :coord [1 2], :north [0 2], :south [2 2], :east nil, :west [1 1], :links #{[2 2] [0 2]}}
-           {:type :Cell, :coord [2 0], :north [1 0], :south [3 0], :east [2 1], :west nil, :links #{[2 1]}}
-           {:type :Cell, :coord [2 1], :north [1 1], :south [3 1], :east [2 2], :west [2 0], :links #{[2 2] [2 0] [3 1]}}
-           {:type :Cell, :coord [2 2], :north [1 2], :south [3 2], :east nil, :west [2 1], :links #{[2 1] [1 2] [3 2]}}
-           {:type :Cell, :coord [3 0], :north [2 0], :south nil, :east [3 1], :west nil, :links #{[3 1]}}
-           {:type :Cell, :coord [3 1], :north [2 1], :south nil, :east [3 2], :west [3 0], :links #{[3 0] [2 1]}}
-           {:type :Cell, :coord [3 2], :north [2 2], :south nil, :east nil, :west [3 1], :links #{[2 2]}}
-           ]
-   :changed-cells #{[2 2] [3 2]}
-   }
-  ;; +---+---+---+
-  ;; |           |
-  ;; +   +   +   +
-  ;; |   |   |   |
-  ;; +---+---+   +
-  ;; |           |
-  ;; +---+   +   +
-  ;; |       |   |
-  ;; +---+---+---+
-
-  )
+;; I thought this was failing just because there's a redundant update at the
+;; end.  But no ... filtered that out, and apparently sometimes max increases
+;; by 2.
+(defspec find-distances-max-advances-by-1
+  10
+  (prop/for-all [[maze start-coord] gen-maze-and-coord]
+    (let [intermediates (butlast (all-updates (partial find-distances maze start-coord)))
+          maxes (map :max intermediates)]
+      (every? #(= 1 %)
+              (map (fn [[a b]] (- b a)) (partition 2 1 maxes))))))

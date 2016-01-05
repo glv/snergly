@@ -185,42 +185,54 @@
      (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
        (lazy-seq (cons new-grid (seq-recursive-backtracker (g/begin-step new-grid) new-stack)))))))
 
-(s/defn find-distances
-  ([grid :- g/Grid start :- g/CellPosition] (find-distances grid start nil))
-  ([grid :- g/Grid
-    start :- g/CellPosition
-    result-chan]
-    (go-loop [distances (g/make-distances start)
-              current start
-              frontier #?(:clj  PersistentQueue/EMPTY
-                          :cljs #queue [])]
-      (let [cell (g/grid-cell grid current)
-            current-distance (distances current)
-            links (remove #(contains? distances %) (:links cell))
-            next-frontier (apply conj frontier links)]
-        (if (empty? next-frontier)
-          (do
-            (when result-chan (async/close! result-chan))
-            (assoc distances :max current-distance :max-coord current))
-          (recur (if (empty? links)
-                   distances
-                   ;; This is *super* clumsy, but has the desirable effect that
-                   ;; we only animate when the max distance actually increases.
-                   ;; That seems right to me, and makes for a very pleasing
-                   ;; animation (not too slow, but you can still see what's
-                   ;; going on, and it really gives the impression of a flood).
-                   ;; I just need to figure out a better way of triggering that
-                   ;; condition.
-                   (let [new-distances (g/add-distances distances links (inc current-distance))
-                         new-distances (if (and result-chan
-                                                (g/changed? new-distances) ; always true, because we just changed it.
-                                                (> (new-distances (peek next-frontier)) current-distance))
-                                         (do (async/>! result-chan new-distances)
-                                             (g/begin-step new-distances))
-                                         new-distances)]
-                     new-distances))
-                 (peek next-frontier)
-                 (pop next-frontier)))))))
+(defn seq-find-distances
+  ([grid start] (seq-find-distances grid
+                                    (g/begin-step (g/make-distances start))
+                                    start
+                                    #?(:clj PersistentQueue/EMPTY
+                                       :cljs #queue [])))
+  ([grid distances current frontier]
+   (let [cell (g/grid-cell grid current)
+         current-distance (distances current)
+         links (remove #(contains? distances %) (:links cell))
+         next-frontier (apply conj frontier links)]
+     (if (empty? next-frontier)
+       (list (assoc distances :max-coord current))
+       (let [new-distances (if (empty? links)
+                             distances
+                             (g/add-distances distances links (inc current-distance)))]
+         (lazy-seq (cons new-distances (seq-find-distances grid (g/begin-step new-distances) (peek next-frontier) (pop next-frontier))))
+         )))
+    )
+  )
+
+(defn each-max
+  "A transducer for distances values that passes the last occurrence of each :max value."
+  []
+  (fn [xf]
+    (let [prev (volatile! nil)]
+      (fn
+        ([] (xf))
+        ([result] (xf (xf result @prev)))
+        ([result input]
+         (let [prior @prev]
+           (vreset! prev input)
+           (if (and prior (> (:max input) (:max prior)))
+             (xf result prior)
+             result)))))))
+
+(defn find-distances
+  ([grid start] (find-distances grid start nil))
+  ([grid start result-chan]
+   (go-loop [[dist & dists] (sequence (each-max) (seq-find-distances grid start))]
+            (if (empty? dists)
+              (do
+                (when result-chan (async/close! result-chan))
+                dist)
+              (recur
+                (do
+                  (when result-chan (async/>! result-chan dist))
+                  dists))))))
 
 (s/defn find-path :- g/Distances
   [grid :- g/Grid
