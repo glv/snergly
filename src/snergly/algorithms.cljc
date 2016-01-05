@@ -3,6 +3,7 @@
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
   (:require #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async])
+                    [clojure.set :as set]
                     [schema.core :as s :include-macros true]
                     [snergly.grid :as g]
                     [snergly.util :as util]
@@ -187,6 +188,13 @@
 (defn recursive-backtracker-seq [grid]
   (recursive-backtracker-seq* (g/begin-step (assoc grid :algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))
 
+;; distances-seq advances on each iteration of Dijkstra's algorithm --- in
+;; other words, for each cell that's on the current wavefront of the flood.
+;; But the animation is better (both faster and, in my opinion, easier to
+;; understand) if it advances each time the entire wavefront advances.  So
+;; this transducer saves the updates, accumulating the set of changed cells,
+;; until :max increases, at which point it lets pass the accumulated update
+;; and starts over with the new :max value.
 (defn trailing-maxes
   "A transducer for distances values that passes the last value containing each :max value."
   []
@@ -197,10 +205,13 @@
         ([result] (xf (xf result @prev)))
         ([result input]
          (let [prior @prev]
-           (vreset! prev input)
            (if (and prior (> (:max input) (:max prior)))
-             (xf result prior)
-             result)))))))
+             (do
+               (vreset! prev input)
+               (xf result prior))
+             (do
+               (vreset! prev (update input :changed-cells set/union (:changed-cells prior)))
+               result))))))))
 
 (defn distances-seq* [grid distances current frontier]
   (let [cell (g/grid-cell grid current)
@@ -222,19 +233,6 @@
                             #?(:clj PersistentQueue/EMPTY
                                :cljs #queue []))))
 
-(defn find-distances
-  ([grid start] (find-distances grid start nil))
-  ([grid start result-chan]
-   (go-loop [[dist & dists] (sequence (trailing-maxes) (distances-seq grid start))]
-            (if (empty? dists)
-              (do
-                (when result-chan (async/close! result-chan))
-                dist)
-              (recur
-                (do
-                  (when result-chan (async/>! result-chan dist))
-                  dists))))))
-
 (s/defn find-path :- g/Distances
   [grid :- g/Grid
    goal :- g/CellPosition
@@ -251,13 +249,7 @@
                                       (:links (g/grid-cell grid current))))]
           (recur neighbor (assoc breadcrumbs neighbor (distances neighbor))))))))
 
-;; synchronous-fn can simply become:
-;;
-;; (defn synchronous-fn [seq-algorithm]
-;;   (fn [grid]
-;;     (first (take-last 1 (seq-algorithm grid)))))
-;;
-;; However ... it would be easy for a bunch of inefficiency to hide in this
+;; TODO: it would be easy for a bunch of inefficiency to hide in this
 ;; process, with the sequences including many redundant updates that get
 ;; filtered out.  So it would be good to have a custom version of the
 ;; transducer here:
@@ -283,21 +275,14 @@
    })
 
 #?(:clj
-   (defn synchronous-fn [func]
-     (fn [& opts]
-       (async/<!! (apply func opts))))
-   )
-
-#?(:clj
    (defn algorithm-fn [name options]
-     ;; Commenting this out for now while restructuring the cljs version
-     (let [algorithm (synchronous-fn (algorithm-functions name))
-           analyze-distances (fn [maze] ((synchronous-fn find-distances) maze (:distances options)))
+     (let [algorithm #(last ((algorithm-functions name) %))
+           analyze-distances (fn [maze] (last (distances-seq maze (:distances options))))
            analyze-path (fn [maze] (find-path maze (:path-to options)
                                               (analyze-distances maze)))
            analyze-longest-path (fn [maze]
-                                  (let [distances (find-distances maze [0 0])
-                                        distances-from-farthest (find-distances maze (:max-coord distances))]
+                                  (let [distances (last (distances-seq maze [0 0]))
+                                        distances-from-farthest (last (distances-seq maze (:max-coord distances)))]
                                     (find-path maze (:max-coord distances-from-farthest) distances-from-farthest)))
            analyze (cond
                      (:longest options) analyze-longest-path
@@ -311,15 +296,4 @@
                                   {:label (g/xform-values util/base36 analysis)
                                    :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)}))))
      )
-   )
-
-#?(:clj
-   (defn runall [algorithm-fn]
-     (let [intermediate-chan (async/chan)
-           result-chan (algorithm-fn intermediate-chan)]
-       (do (async/<!! (async/go-loop []
-                        (if (async/<! intermediate-chan)
-                          (recur)
-                          (async/<! result-chan))))
-           "Done.")))
    )

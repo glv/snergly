@@ -53,7 +53,7 @@
 
 (def gen-maze-and-coord
   (gen/bind gen-grid
-            (fn [grid] (gen/tuple (gen/return (first (take-last 1 (binary-tree-seq grid))))
+            (fn [grid] (gen/tuple (gen/return (last (binary-tree-seq grid)))
                                   (gen/tuple
                                     (gen/choose 0 (dec (:rows grid)))
                                     (gen/choose 0 (dec (:columns grid))))))))
@@ -105,7 +105,7 @@
   (sequence (comp (dedupe) (filter  grid/changed?)) (algorithm-fn)))
 
 (defn final-update [algorithm-fn]
-  (first (take-last 1 (all-updates algorithm-fn))))
+  (last (all-updates algorithm-fn)))
 
 ;; -----------------------------------------------------------------------------
 ;; Property definitions for maze algorithms
@@ -128,7 +128,7 @@
      (prop/for-all [grid# gen-grid]
        (let [final# (final-update (partial (algorithm-functions "binary-tree") grid#))
              links# (map :links (grid-cells final#))
-             distances# ((synchronous-fn find-distances) final# [0 0])
+             distances# (last (distances-seq final# [0 0]))
              ]
          (every? not-empty links#)                    ; quick check for no isolated cells
          (every? #(contains? distances# %) (grid/grid-coords final#)) ; every cell reachable
@@ -200,7 +200,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Properties for analysis algorithms
 
-;; What kinds of properties can I assert about find-distances?
+;; What kinds of properties can I assert about distances-seq?
 ;;
 ;; * Each cell is changed exactly once (done)
 ;; * :max always increases by 1 (starting with 1)
@@ -211,7 +211,7 @@
 ;; different algorithms?  I would say not, because if they're all perfect
 ;; mazes, the biases etc. in the mazes won't make a difference.
 
-(defspec find-distances-changes-each-cell-exactly-once
+(defspec distances-seq-changes-each-cell-exactly-once
   10
   (prop/for-all [[grid start-coord] gen-grid-and-coord]
     (let [maze (final-update #((algorithm-functions "binary-tree") grid))
@@ -223,21 +223,21 @@
       (= (set (grid/grid-coords grid))
          (set (keys change-counts))))))
 
-;(defspec find-distances-each-intermediate-changes ;f
-;  5
-;  (prop/for-all [[grid start-coord] gen-grid-and-coord]
-;    (let [maze (final-update #((algorithm-functions "binary-tree") grid))
-;          intermediates (butlast (all-updates #(distances-seq maze start-coord)))
-;          change-sets (map :changed-cells intermediates)]
-;      (every? not-empty change-sets))))
-;
-;;; I thought this was failing just because there's a redundant update at the
-;;; end.  But no ... filtered that out, and apparently sometimes max increases
-;;; by 2.
-;(defspec find-distances-max-advances-by-1 ;f
-;  10
-;  (prop/for-all [[maze start-coord] gen-maze-and-coord]
-;    (let [intermediates (butlast (all-updates #(distances-seq maze start-coord)))
-;          maxes (map :max intermediates)]
-;      (every? #(= 1 %)
-;              (map (fn [[a b]] (- b a)) (partition 2 1 maxes))))))
+(defspec distances-seq-each-intermediate-changes ;f
+  5
+  (prop/for-all [[grid start-coord] gen-grid-and-coord]
+    (let [maze (final-update #((algorithm-functions "binary-tree") grid))
+          intermediates (butlast (all-updates #(distances-seq maze start-coord)))
+          change-sets (map :changed-cells intermediates)]
+      (every? not-empty change-sets))))
+
+;; I thought this was failing just because there's a redundant update at the
+;; end.  But no ... filtered that out, and apparently sometimes max increases
+;; by 2.
+(defspec distances-seq-max-advances-by-1 ;f
+  10
+  (prop/for-all [[maze start-coord] gen-maze-and-coord]
+    (let [intermediates (butlast (all-updates #(distances-seq maze start-coord)))
+          maxes (map :max intermediates)]
+      (every? #(= 1 %)
+              (map (fn [[a b]] (- b a)) (partition 2 1 maxes))))))
