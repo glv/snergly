@@ -1,4 +1,7 @@
-(ns snergly.util)
+(ns snergly.util
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go-loop]]))
+  (:require #?(:clj [clojure.core.async :as async :refer [go-loop]]
+               :cljs [cljs.core.async :as async])))
 
 (defn- pad [size char s]
   (let [needed (- size (count s))]
@@ -18,3 +21,19 @@
   #?(:clj (java.lang.Integer/toString num 36)
      :cljs (.toString num 36)))
 
+;; This is from clojure.core.async.lab, and is not available in the cljs
+;; version of core.async.  But it works fine and it's exactly what I need.
+(defn spool
+  "Take a sequence and puts each value on a channel and returns the channel.
+   If no channel is provided, an unbuffered channel is created. If the
+   sequence ends, the channel is closed."
+  ([s c]
+   (go-loop [[f & r] s]
+     (if f
+       (do
+         (async/>! c f)
+         (recur r))
+       (async/close! c)))
+   c)
+  ([s]
+   (spool s (async/chan))))

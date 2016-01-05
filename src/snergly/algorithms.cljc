@@ -30,27 +30,30 @@
 ;; Naming conventions:
 ;;
 ;; Top-level maze algorithm functions in this namespace are
-;; named "maze-name", where "name" is the name of the algorithm
-;; (for example, "maze-sidewinder"). Anytime a new algorithm is
+;; named "name-seq", where "name" is the name of the algorithm
+;; (for example, "sidewinder-seq"). Anytime a new algorithm is
 ;; added, the name should also be added to snergly.core/algorithms
 ;; (at least until I decide whether that vector should be built
-;; automatically from this namespace).
+;; automatically from this namespace).  Each of them takes an input
+;; grid, and returns a lazy seq of new grids, each one a single
+;; step in the generation of the maze.  The completed maze is the
+;; last grid in the seq.
 ;;
 ;; Helper functions used for only a particular algorithm should
 ;; have the algorithm name as a name prefix (for example,
 ;; sidewinder-step).
 
-(defn seq-binary-tree
-  ([grid]
-    (lazy-seq (cons grid (seq-binary-tree (g/begin-step (assoc grid :algorithm-name "binary-tree")) (g/grid-coords grid)))))
-  ([grid [coord & coords]]
-    (when coord
-      (let [cell (g/grid-cell grid coord)
-            neighbors (g/cell-neighbors cell [:north :east])
-            next-grid (if (empty? neighbors)
-                        grid
-                        (g/link-cells grid cell (rand-nth neighbors)))]
-        (lazy-seq (cons next-grid (seq-binary-tree (g/begin-step next-grid) coords)))))))
+(defn binary-tree-seq* [grid [coord & coords]]
+  (when coord
+    (let [cell (g/grid-cell grid coord)
+          neighbors (g/cell-neighbors cell [:north :east])
+          next-grid (if (empty? neighbors)
+                      grid
+                      (g/link-cells grid cell (rand-nth neighbors)))]
+      (lazy-seq (cons next-grid (binary-tree-seq* (g/begin-step next-grid) coords))))))
+
+(defn binary-tree-seq [grid]
+  (binary-tree-seq* (g/begin-step (assoc grid :algorithm-name "binary-tree")) (g/grid-coords grid)))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (:east cell))
@@ -74,35 +77,32 @@
                    (g/link-cells grid cell (:east cell)))]
     [new-grid (if end-run? [] run)]))
 
-;; I really should have the single-arity function as just maze-sidewinder,
-;; and then the others as maze-sidewinder*
-(defn seq-sidewinder
-  ([grid]
-   (lazy-seq (cons grid (seq-sidewinder (g/begin-step (assoc grid :algorithm-name "sidewinder")) (g/grid-coords grid)))))
-  ([grid coords]
-   (seq-sidewinder grid coords [(first coords)]))
-  ([grid [coord & coords] current-run]
-   (when-not (nil? coord)
-     (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
-       (lazy-seq (cons new-grid (seq-sidewinder (g/begin-step new-grid) coords (conj processed-run (first coords)))))))))
+(defn sidewinder-seq* [grid [coord & coords] current-run]
+  (when-not (nil? coord)
+    (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
+      (lazy-seq (cons new-grid (sidewinder-seq* (g/begin-step new-grid) coords (conj processed-run (first coords))))))))
 
-(defn seq-aldous-broder
-  ([grid]
-    (lazy-seq (cons grid (seq-aldous-broder (g/begin-step (assoc grid :algorithm-name "aldous-broder"))
-                                            (g/random-coord grid)
-                                            (dec (g/grid-size grid))))))
-  ([grid current unvisited]
-    (if (= unvisited 0)
-      (list grid)
-      (let [cell (g/grid-cell grid current)
-            neighbor (rand-nth (g/cell-neighbors cell))
-            neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))
-            new-grid (if neighbor-new?
-                       (g/link-cells grid cell neighbor)
-                       grid)]
-        (lazy-seq (cons new-grid (seq-aldous-broder (g/begin-step new-grid)
-                                                    neighbor
-                                                    (if neighbor-new? (dec unvisited) unvisited))))))))
+(defn sidewinder-seq [grid]
+  (let [coords (g/grid-coords grid)]
+    (sidewinder-seq* (g/begin-step (assoc grid :algorithm-name "sidewinder")) coords [(first coords)])))
+
+(defn aldous-broder-seq* [grid current unvisited]
+  (if (= unvisited 0)
+    (list grid)
+    (let [cell (g/grid-cell grid current)
+          neighbor (rand-nth (g/cell-neighbors cell))
+          neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))
+          new-grid (if neighbor-new?
+                     (g/link-cells grid cell neighbor)
+                     grid)]
+      (lazy-seq (cons new-grid (aldous-broder-seq* (g/begin-step new-grid)
+                                                   neighbor
+                                                   (if neighbor-new? (dec unvisited) unvisited)))))))
+
+(defn aldous-broder-seq [grid]
+  (aldous-broder-seq* (g/begin-step (assoc grid :algorithm-name "aldous-broder"))
+                      (g/random-coord grid)
+                      (dec (g/grid-size grid))))
 
 (defn wilsons-loop-erased-walk [grid start-coord unvisited]
   (let [unvisited-set (set unvisited)]
@@ -117,25 +117,25 @@
                    (conj path next-coord)
                    (subvec path 0 (inc position)))))))))
 
-(declare seq-wilsons)
+(declare wilsons-seq*)
 
 (defn wilsons-carve-passage [grid unvisited [[coord1 coord2] & pairs]]
   (let [new-grid (g/link-cells grid (g/grid-cell grid coord1) coord2)
         new-unvisited (remove (partial = coord1) unvisited)]
     (if (empty? pairs)
-      (lazy-seq (cons new-grid (seq-wilsons (g/begin-step new-grid) new-unvisited)))
+      (lazy-seq (cons new-grid (wilsons-seq* (g/begin-step new-grid) new-unvisited)))
       (lazy-seq (cons new-grid (wilsons-carve-passage (g/begin-step new-grid) new-unvisited pairs))))))
 
-(defn seq-wilsons
-  ([grid]
-   (lazy-seq (cons grid (seq-wilsons (g/begin-step (assoc grid :algorithm-name "wilsons"))
-                                     (rest (shuffle (g/grid-coords grid)))))))
-  ([grid unvisited]
-   (if (empty? unvisited)
-     nil
-     (let [coord (rand-nth unvisited)
-           path (wilsons-loop-erased-walk grid coord unvisited)]
-       (wilsons-carve-passage grid unvisited (partition 2 1 path))))))
+(defn wilsons-seq* [grid unvisited]
+  (if (empty? unvisited)
+    nil
+    (let [coord (rand-nth unvisited)
+          path (wilsons-loop-erased-walk grid coord unvisited)]
+      (wilsons-carve-passage grid unvisited (partition 2 1 path)))))
+
+(defn wilsons-seq [grid]
+  (wilsons-seq* (g/begin-step (assoc grid :algorithm-name "wilsons"))
+                (rest (shuffle (g/grid-coords grid)))))
 
 (defn hunt-and-kill-start-new-walk [grid]
   (loop [[current-coord & other-coords] (g/grid-coords grid)]
@@ -157,13 +157,14 @@
         [(g/link-cells grid current-cell neighbor)
          neighbor]))))
 
-(defn seq-hunt-and-kill
-  ([grid] (lazy-seq (cons grid (seq-hunt-and-kill (g/begin-step (assoc grid :algorithm-name "hunt-and-kill")) (g/random-coord grid)))))
-  ([grid current-coord]
-   (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
-     (if-not next-coord
-       (list new-grid)
-       (lazy-seq (cons new-grid (seq-hunt-and-kill (g/begin-step new-grid) next-coord)))))))
+(defn hunt-and-kill-seq* [grid current-coord]
+  (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
+    (if-not next-coord
+      (list new-grid)
+      (lazy-seq (cons new-grid (hunt-and-kill-seq* (g/begin-step new-grid) next-coord))))))
+
+(defn hunt-and-kill-seq [grid]
+  (hunt-and-kill-seq* (g/begin-step (assoc grid :algorithm-name "hunt-and-kill")) (g/random-coord grid)))
 
 (defn recursive-backtracker-step [grid stack]
   (let [grid (g/begin-step grid)
@@ -177,37 +178,17 @@
         [(g/link-cells grid current-cell next-current)
          (conj stack next-current)]))))
 
-(defn seq-recursive-backtracker
-  ([grid] (lazy-seq (cons grid (seq-recursive-backtracker (g/begin-step (assoc grid :algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))))
-  ([grid stack]
-   (if (empty? stack)
-     (list grid)
-     (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
-       (lazy-seq (cons new-grid (seq-recursive-backtracker (g/begin-step new-grid) new-stack)))))))
+(defn recursive-backtracker-seq* [grid stack]
+  (if (empty? stack)
+    (list grid)
+    (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
+      (lazy-seq (cons new-grid (recursive-backtracker-seq* (g/begin-step new-grid) new-stack))))))
 
-(defn seq-find-distances
-  ([grid start] (seq-find-distances grid
-                                    (g/begin-step (g/make-distances start))
-                                    start
-                                    #?(:clj PersistentQueue/EMPTY
-                                       :cljs #queue [])))
-  ([grid distances current frontier]
-   (let [cell (g/grid-cell grid current)
-         current-distance (distances current)
-         links (remove #(contains? distances %) (:links cell))
-         next-frontier (apply conj frontier links)]
-     (if (empty? next-frontier)
-       (list (assoc distances :max-coord current))
-       (let [new-distances (if (empty? links)
-                             distances
-                             (g/add-distances distances links (inc current-distance)))]
-         (lazy-seq (cons new-distances (seq-find-distances grid (g/begin-step new-distances) (peek next-frontier) (pop next-frontier))))
-         )))
-    )
-  )
+(defn recursive-backtracker-seq [grid]
+  (recursive-backtracker-seq* (g/begin-step (assoc grid :algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))
 
-(defn each-max
-  "A transducer for distances values that passes the last occurrence of each :max value."
+(defn trailing-maxes
+  "A transducer for distances values that passes the last value containing each :max value."
   []
   (fn [xf]
     (let [prev (volatile! nil)]
@@ -221,10 +202,30 @@
              (xf result prior)
              result)))))))
 
+(defn distances-seq* [grid distances current frontier]
+  (let [cell (g/grid-cell grid current)
+        current-distance (distances current)
+        links (remove #(contains? distances %) (:links cell))
+        next-frontier (apply conj frontier links)]
+    (if (empty? next-frontier)
+      (list (assoc distances :max-coord current))
+      (let [new-distances (if (empty? links)
+                            distances
+                            (g/add-distances distances links (inc current-distance)))]
+        (lazy-seq (cons new-distances (distances-seq* grid (g/begin-step new-distances) (peek next-frontier) (pop next-frontier))))))))
+
+(defn distances-seq [grid start]
+  (sequence (trailing-maxes)
+            (distances-seq* grid
+                            (g/begin-step (g/make-distances start))
+                            start
+                            #?(:clj PersistentQueue/EMPTY
+                               :cljs #queue []))))
+
 (defn find-distances
   ([grid start] (find-distances grid start nil))
   ([grid start result-chan]
-   (go-loop [[dist & dists] (sequence (each-max) (seq-find-distances grid start))]
+   (go-loop [[dist & dists] (sequence (trailing-maxes) (distances-seq grid start))]
             (if (empty? dists)
               (do
                 (when result-chan (async/close! result-chan))
@@ -250,15 +251,7 @@
                                       (:links (g/grid-cell grid current))))]
           (recur neighbor (assoc breadcrumbs neighbor (distances neighbor))))))))
 
-;; once I convert all of the algorithms to lazy sequence generators, this can
-;; collapse to something like this:
-;;
-;; (defn async-from-seq [seq-algorithm]
-;;   (fn [grid]
-;;     (spool (seq-algorithm grid)
-;;            (async/chan nil (comp (dedupe) (filter grid/changed?))))))
-;;
-;; and, similarly, synchronous-fn can simply become:
+;; synchronous-fn can simply become:
 ;;
 ;; (defn synchronous-fn [seq-algorithm]
 ;;   (fn [grid]
@@ -272,29 +265,21 @@
 ;;     (comp (dedupe) (filter grid/changed?))
 ;;
 ;; that would count how many elements get filtered.
-;;
-(defn async-from-seq [seq-algorithm]
-  (fn [grid result-chan]
-    (go-loop [[grid & grids] (sequence (comp (dedupe) (filter  grid/changed?)) (seq-algorithm grid))]
-             (if (empty? grids)
-               (do
-                 (when result-chan (async/close! result-chan))
-                 grid)
-               (recur
-                 (do
-                   (when result-chan (async/>! result-chan grid))
-                   grids))))))
+
+(defn seq-channel [seq-algorithm]
+  (util/spool (seq-algorithm)
+              (async/chan 1 (comp (dedupe) (filter grid/changed?)))))
 
 ;; I was finding the maze function with (resolve (symbol (str "maze-" name))).
 ;; But apparently ClojureScript namespaces aren't as reflective as Clojure, so
 ;; I have to have a map.
 (def algorithm-functions
-  {"binary-tree" (async-from-seq seq-binary-tree)
-   "sidewinder" (async-from-seq seq-sidewinder)
-   "aldous-broder" (async-from-seq seq-aldous-broder)
-   "wilsons" (async-from-seq seq-wilsons)
-   "hunt-and-kill" (async-from-seq seq-hunt-and-kill)
-   "recursive-backtracker" (async-from-seq seq-recursive-backtracker)
+  {"binary-tree" binary-tree-seq
+   "sidewinder" sidewinder-seq
+   "aldous-broder" aldous-broder-seq
+   "wilsons" wilsons-seq
+   "hunt-and-kill" hunt-and-kill-seq
+   "recursive-backtracker" recursive-backtracker-seq
    })
 
 #?(:clj

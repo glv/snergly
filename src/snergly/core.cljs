@@ -46,52 +46,44 @@
 
 (defn produce-analysis-async [maze {:keys [analysis start-row start-col end-row end-col] :as maze-params}]
   (println (str "analysis: " analysis))
-  (if (= "distances" analysis)
+  (when (= "distances" analysis)
     (do
-      (let [intermediate-chan (async/chan)
-            result-chan (algs/find-distances maze [start-row start-col] intermediate-chan)]
+      (let [analysis-fn #(algs/distances-seq maze [start-row start-col])
+            result-chan (algs/seq-channel analysis-fn)]
         (set-maze-params! :active "Finding distances …")
         (go-loop [grid maze]
-                 (let [distances (async/<! intermediate-chan)]
+                 (let [distances (async/<! result-chan)]
                    (if distances
                      (let [grid (annotate-grid grid distances)]
                        (set-maze-params! :grid (atom grid))
                        (async/<! (async/timeout 0))
                        (recur grid))
-                     (let [distances (async/<! result-chan)]
-                       (set-maze-params! :grid (atom (annotate-grid maze distances))
-                                         :active nil)
-                       (async/<! (async/timeout 0)))
-                     )))
-        (async/timeout 0)))
-    (async/timeout 0)
-  ))
+                       (set-maze-params! :active nil))))))))
 
 (defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
   (println (str "algorithm: " algorithm))
   (set-maze-params! :active "Carving maze …")
-  (let [intermediate-chan (async/chan)
-        algorithm-fn (algs/algorithm-functions algorithm)
-        grid (grid/make-grid rows columns)
-        result-chan (algorithm-fn (grid/make-grid rows columns) intermediate-chan)]
+  (let [grid (grid/make-grid rows columns)
+        algorithm-fn #((algs/algorithm-functions algorithm) grid)
+        result-chan (algs/seq-channel algorithm-fn)]
     (go
       (set-maze-params! :grid (atom grid))
       (async/<! (async/timeout 0))
-      (loop []
-        (if-let [new-maze (async/<! intermediate-chan)]
+      (loop [prev-maze nil]
+        (if-let [new-maze (async/<! result-chan)]
           (do
             (set-maze-params! :grid (atom new-maze))
             (async/<! (async/timeout 0))
-            (recur))
-          (let [maze (async/<! result-chan)]
-            (set-maze-params! :grid (atom maze)
-                              :active nil)
-            maze))))))
+            (recur new-maze))
+          (do
+            (set-maze-params! :active nil)
+            prev-maze))))))
 
 (defn run-animation [maze-params]
   (go
     (let [maze (async/<! (produce-maze-async maze-params))
-          maze (async/<! (produce-analysis-async maze maze-params))])))
+          analysis-chan (produce-analysis-async maze maze-params)]
+      (when analysis-chan (async/<! analysis-chan)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing
