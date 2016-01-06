@@ -294,6 +294,5 @@
                analysis (analyze maze)]
            (g/grid-annotate-cells maze
                                   {:label (g/xform-values util/base36 analysis)
-                                   :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)}))))
-     )
+                                   :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)})))))
    )

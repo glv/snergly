@@ -4,7 +4,6 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.clojure-test :refer :all]
-            [clojure.core.async :as async]
             [clojure.set :as set]
             [schema.test]
             [snergly.algorithms :refer :all]
@@ -209,9 +208,6 @@
           change-sets (map :changed-cells intermediates)]
       (every? not-empty change-sets))))
 
-;; I thought this was failing just because there's a redundant update at the
-;; end.  But no ... filtered that out, and apparently sometimes max increases
-;; by 2.
 (defspec distances-seq-max-advances-by-1
   10
   (prop/for-all [[maze start-coord] gen-maze-and-coord]
