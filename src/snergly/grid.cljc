@@ -147,7 +147,7 @@
    :origin origin
    :max 0
    origin 0
-   :changed-cells nil})
+   :changed-cells #{origin}})
 
 (s/defn add-distances :- Distances
   [{:keys [changed-cells] :as distances} :- Distances
@@ -163,15 +163,13 @@
   [value-xform
    value-map :- Distances]
   "Returns a version of value-map with values transformed by value-xform."
-  (reduce-kv (fn [m k v] (if (coll? k) (assoc m k (value-xform v)) m))
-             {}
-             value-map))
+  (reduce (fn [m cell] (assoc m cell (value-xform (value-map cell)))) value-map (:changed-cells value-map)))
 
 (s/defn grid-annotate-cells :- Grid
   [grid :- Grid
    label-specs :- {s/Keyword Distances}]
   (let [specs (seq label-specs)
-        changed-cells (apply set/union (map :changed-cells specs))
+        changed-cells (apply set/union (map (comp :changed-cells second) specs))
         get-annotations (fn [cell-coord [label value-map]] (vector label (value-map cell-coord)))
         assoc-cell (fn [cell cell-coord]
                      (apply assoc cell (mapcat (partial get-annotations cell-coord) specs)))

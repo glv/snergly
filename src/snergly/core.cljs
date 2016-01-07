@@ -23,7 +23,7 @@
 
 (def init-data
   {:app/algorithms (sort algs/algorithm-names)
-   :app/analyses ["none" "distances"] ; "path" "longest path"
+   :app/analyses ["none" "distances" "path" "longest path"]
    :maze {:algorithm ""
           :rows 10
           :columns 10
@@ -38,27 +38,63 @@
 
           :active nil}})
 
-(defn annotate-grid [maze distances]
-  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell (:max distances) %) distances)}))
+(defn annotate-grid [maze distances color-family]
+  ;; I really need to either:
+  ;;
+  ;; 1. Go ahead and realize the whole sequence and find out what the maximum
+  ;;    distance is before starting the animation.  In fact, I could animate
+  ;;    the whole thing just from that one distances map (each time just
+  ;;    annotate the cells with a given distance value.  But of course, this
+  ;;    strategy depends on how fast the full distances algorithm is, and I
+  ;;    need to do some experiments on that.
+  ;; 2. Choose the max-distance to pass in differently based on what algorithm
+  ;;    was used to generate the maze, in which case I need to do some tests
+  ;;    to see what the max distance is for different algorithms.
+  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell (/ (grid/grid-size maze) 2) % color-family) distances)}))
 
-(defn annotate-grid-flat [maze distances]
-  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell % %) distances)}))
+(defn annotate-grid-flat [maze distances color-family]
+  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell % % color-family) distances)}))
 
-(defn produce-analysis-async [maze {:keys [analysis start-row start-col end-row end-col] :as maze-params}]
+(defn produce-distances-async [{:keys [start-row start-col] :as maze-params} color-family maze]
+  (let [prev-distances (:distances maze)
+        [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])
+        analysis-fn #(algs/distances-seq maze [start-row start-col])
+        result-chan (algs/seq-channel analysis-fn)]
+    (set-maze-params! :active "Finding distances …")
+    (go-loop [grid maze]
+             (let [distances (async/<! result-chan)]
+               (if distances
+                 (let [grid (assoc (annotate-grid grid distances color-family) :distances distances)]
+                   (set-maze-params! :grid (atom grid))
+                   (async/<! (async/timeout 0))
+                   (recur grid)))
+               grid))))
+
+(defn produce-path-async [{:keys [end-row end-col] :as maze-params} longest? maze]
+  (let [prev-distances (:distances maze)
+        [end-row end-col] (if longest? (:max-coord prev-distances) [end-row end-col])
+        analysis-fn #(algs/path-seq maze prev-distances [end-row end-col])
+        result-chan (algs/seq-channel analysis-fn)]
+    (set-maze-params! :active (str "Plotting path (" (inc (:max prev-distances)) " cells long) …"))
+    (go-loop [grid maze]
+             (let [distances (async/<! result-chan)]
+               (if distances
+                 (let [grid (assoc (annotate-grid-flat grid distances :red) :path distances)]
+                   (set-maze-params! :grid (atom grid))
+                   (async/<! (async/timeout 0))
+                   (recur grid)))
+               grid))))
+
+(defn analysis-steps [{:keys [analysis start-row start-col end-row end-col] :as maze-params}]
   (println (str "analysis: " analysis))
-  (when (= "distances" analysis)
-    (do
-      (let [analysis-fn #(algs/distances-seq maze [start-row start-col])
-            result-chan (algs/seq-channel analysis-fn)]
-        (set-maze-params! :active "Finding distances …")
-        (go-loop [grid maze]
-                 (let [distances (async/<! result-chan)]
-                   (if distances
-                     (let [grid (annotate-grid grid distances)]
-                       (set-maze-params! :grid (atom grid))
-                       (async/<! (async/timeout 0))
-                       (recur grid))
-                       (set-maze-params! :active nil))))))))
+  (condp = analysis
+    "none" []
+    "distances" [(partial produce-distances-async maze-params :green)]
+    "path" [(partial produce-distances-async maze-params :green)
+            (partial produce-path-async maze-params false)]
+    "longest path" [(partial produce-distances-async maze-params :green)
+                    (partial produce-distances-async maze-params :blue)
+                    (partial produce-path-async maze-params true)]))
 
 (defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
   (println (str "algorithm: " algorithm))
@@ -80,10 +116,15 @@
             prev-maze))))))
 
 (defn run-animation [maze-params]
-  (go
-    (let [maze (async/<! (produce-maze-async maze-params))
-          analysis-chan (produce-analysis-async maze maze-params)]
-      (when analysis-chan (async/<! analysis-chan)))))
+  (let [steps (cons (fn [_] (produce-maze-async maze-params))
+                    (analysis-steps maze-params))]
+    (go
+      (loop [grid nil
+             [step & steps] steps]
+        (when step
+          (recur (async/<! (step grid))
+                 steps)))
+      (set-maze-params! :active nil))))
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing
@@ -148,21 +189,16 @@
     (let [{:keys [grid cell-size] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid g @grid cell-size)
-      )
-    )
+      (image/image-grid g @grid cell-size)))
   (componentDidUpdate [this prev-props prev-state]
     (let [{:keys [grid cell-size] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid g @grid cell-size)
-      )
-    )
+      (image/image-grid g @grid cell-size)))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
             width (inc (* cell-size columns))]
-        (println (str "Active: " active))
         (dom/div nil
                  (dom/div nil (or active "\u00a0")) ; &nbsp;
                  (dom/canvas #js {:id "c1"

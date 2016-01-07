@@ -226,28 +226,31 @@
         (lazy-seq (cons new-distances (distances-seq* grid (g/begin-step new-distances) (peek next-frontier) (pop next-frontier))))))))
 
 (defn distances-seq [grid start]
-  (sequence (trailing-maxes)
-            (distances-seq* grid
-                            (g/begin-step (g/make-distances start))
-                            start
-                            #?(:clj PersistentQueue/EMPTY
-                               :cljs #queue []))))
+  (let [distances (g/make-distances start)]
+    (sequence (trailing-maxes)
+              (lazy-seq (cons distances (distances-seq* grid
+                                                        (g/begin-step distances)
+                                                        start
+                                                        #?(:clj PersistentQueue/EMPTY
+                                                           :cljs #queue [])))))))
 
-(s/defn find-path :- g/Distances
-  [grid :- g/Grid
-   goal :- g/CellPosition
-   distances :- g/Distances]
-  (let [origin (:origin distances)]
-    (loop [current goal
-           breadcrumbs {origin 0 :origin origin
-                        goal (distances goal) :max-coord goal
-                        :max (distances goal)}]
-      (if (= current origin)
-        breadcrumbs
-        (let [current-distance (distances current)
-              neighbor (first (filter #(< (distances %) current-distance)
-                                      (:links (g/grid-cell grid current))))]
-          (recur neighbor (assoc breadcrumbs neighbor (distances neighbor))))))))
+(defn path-seq* [grid {:keys [origin] :as distances} current breadcrumbs]
+  (if (= current origin)
+    (list breadcrumbs)
+    (let [current-distance (distances current)
+          neighbor (first (filter #(< (distances %) current-distance)
+                                  (:links (g/grid-cell grid current))))
+          new-breadcrumbs (g/add-distances breadcrumbs [neighbor] (distances neighbor))]
+      (lazy-seq (cons new-breadcrumbs (path-seq* grid distances neighbor (g/begin-step new-breadcrumbs)))))))
+
+(defn path-seq [grid distances goal]
+  (let [goal-distance (distances goal)
+        breadcrumbs (assoc (g/add-distances (g/make-distances (:origin distances))
+                                            [goal]
+                                            goal-distance)
+                           :max goal-distance
+                           :max-coord goal)]
+    (lazy-seq (cons breadcrumbs (path-seq* grid distances goal (g/begin-step breadcrumbs))))))
 
 ;; TODO: it would be easy for a bunch of inefficiency to hide in this
 ;; process, with the sequences including many redundant updates that get
@@ -278,20 +281,20 @@
    (defn algorithm-fn [name options]
      (let [algorithm #(last ((algorithm-functions name) %))
            analyze-distances (fn [maze] (last (distances-seq maze (:distances options))))
-           analyze-path (fn [maze] (find-path maze (:path-to options)
-                                              (analyze-distances maze)))
+           analyze-path (fn [maze] (last (path-seq maze (analyze-distances maze) (:path-to options))))
            analyze-longest-path (fn [maze]
                                   (let [distances (last (distances-seq maze [0 0]))
                                         distances-from-farthest (last (distances-seq maze (:max-coord distances)))]
-                                    (find-path maze (:max-coord distances-from-farthest) distances-from-farthest)))
+                                    (last (path-seq maze distances-from-farthest (:max-coord distances-from-farthest)))))
            analyze (cond
                      (:longest options) analyze-longest-path
                      (:path-to options) analyze-path
                      (:distances options) analyze-distances
                      :else (fn [_] {}))]
        (fn [grid]
-         (let [maze (algorithm grid)
-               analysis (analyze maze)]
+         (let [maze (assoc (algorithm grid) :changed-cells (into #{} (g/grid-coords grid)))
+               analysis (analyze maze)
+               analysis (assoc analysis :changed-cells (into #{} (filter vector? (keys analysis))))]
            (g/grid-annotate-cells maze
                                   {:label (g/xform-values util/base36 analysis)
                                    :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)})))))
