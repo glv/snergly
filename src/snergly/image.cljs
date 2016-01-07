@@ -25,16 +25,20 @@
           cell (g/grid-cell grid coord)]
       (draw-fn cell cell-size x1 y1 x2 y2))))
 
-(defn draw-cell-background [g cell cell-size x1 y1 _ _]
-  (let [color (:color cell)]
-    (when color (fill-rect g color x1 y1 cell-size cell-size))))
+(defn draw-cell-background [g cell cell-size x y _ _]
+  (let [color (:color cell)
+        ;[x w] (if (g/linked? cell (:west cell)) [(dec x) (inc cell-size)] [x cell-size])
+        ;[y h] (if (g/linked? cell (:north cell)) [(dec y) (inc cell-size)] [y cell-size])
+        w (if (g/linked? cell (:east cell)) (inc cell-size) cell-size)
+        h (if (g/linked? cell (:south cell)) (inc cell-size) cell-size)]
+    (when color (fill-rect g color x y w h))))
 
 (defn draw-cell-walls [g background wall cell _ x1 y1 x2 y2]
   (when-not (:north cell) (draw-line g wall x1 y1 x2 y1))
   (when-not (:west cell) (draw-line g wall x1 y1 x1 y2))
 
-  (draw-line g (if (g/linked? cell (:east cell)) background wall) x2 y1 x2 y2)
-  (draw-line g (if (g/linked? cell (:south cell)) background wall) x1 y2 x2 y2))
+  (when-not (g/linked? cell (:east cell)) (draw-line g wall x2 y1 x2 y2))
+  (when-not (g/linked? cell (:south cell)) (draw-line g wall x1 y2 x2 y2)))
 
 (defn image-grid [g {:keys [rows columns] :as grid} cell-size]
   (let [img-width (inc (* cell-size columns))
