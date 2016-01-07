@@ -188,6 +188,24 @@
 (defn recursive-backtracker-seq [grid]
   (recursive-backtracker-seq* (g/begin-step (assoc grid :algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))
 
+;; There are a couple of weird, sporadic rendering bugs that are hard to track
+;; down because they only appear on some mazes.  This is a deterministic
+;; algorithm that triggers them every time, which should be helpful for
+;; debugging.
+(defn pessimal-seq* [grid [[row :as coord] & coords]]
+  (when coord
+    (let [cell (g/grid-cell grid coord)
+          next-grid (cond
+                      (:east cell) (g/link-cells grid cell (:east cell))
+                      (and (odd? row) (:south cell)) (let [first-on-row (g/grid-cell grid [row 0])]
+                                                       (g/link-cells grid first-on-row (:south first-on-row)))
+                      (and (even? row) (:south cell)) (g/link-cells grid cell (:south cell))
+                      :else grid)]
+      (lazy-seq (cons next-grid (pessimal-seq* (g/begin-step next-grid) coords))))))
+
+(defn pessimal-seq [grid]
+  (pessimal-seq* (g/begin-step (assoc grid :algorithm-name "pessimal")) (g/grid-coords grid)))
+
 ;; distances-seq advances on each iteration of Dijkstra's algorithm --- in
 ;; other words, for each cell that's on the current wavefront of the flood.
 ;; But the animation is better (both faster and, in my opinion, easier to
