@@ -50,7 +50,7 @@
   ;; 2. Choose the max-distance to pass in differently based on what algorithm
   ;;    was used to generate the maze, in which case I need to do some tests
   ;;    to see what the max distance is for different algorithms.
-  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell (/ (grid/grid-size maze) 2) % color-family) distances)}))
+  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell (* (grid/grid-size maze) 0.8) % color-family) distances)}))
 
 (defn annotate-grid-flat [maze distances color-family]
   (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell % % color-family) distances)}))
