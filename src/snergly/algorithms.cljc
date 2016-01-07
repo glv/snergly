@@ -196,7 +196,8 @@
 ;; until :max increases, at which point it lets pass the accumulated update
 ;; and starts over with the new :max value.
 (defn trailing-maxes
-  "A transducer for distances values that passes the last value containing each :max value."
+  "A transducer for distances values that collapses consecutive values with the
+  same :max into one."
   []
   (fn [xf]
     (let [prev (volatile! nil)]
