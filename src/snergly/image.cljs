@@ -1,11 +1,14 @@
 (ns snergly.image
-  (:require [snergly.grid :as g]))
+  (:require [snergly.grid :as g]
+            [snergly.util :as util]
+            [schema.core :as s :include-macros true]
+            [clojure.set :as set]))
 
 ;; File conventions:
 ;;
 ;; Any variable called 'g' is a CanvasRenderingContext2D object.
 
-(def *optimize-drawing* false)
+(def *optimize-drawing* true)
 
 (defn fill-rect [g style x y w h]
   (aset g "fillStyle" style)
@@ -18,29 +21,82 @@
   (.lineTo g x2 y2)
   (.stroke g))
 
-(defn draw-cells [{:keys [changed-cells] :as grid} cell-size draw-fn]
-  (doseq [coord (if (g/new? grid) (g/grid-coords grid) changed-cells)]
+(def DistanceMap
+  "Schema for Distances with rendering info"
+  {:distances g/Distances
+   :color-family s/Keyword
+   :max-distance s/Int})
+
+(def PathMap
+  "Schema for Path with rendering info"
+  {:distances g/Distances
+   :color-family s/Keyword})
+
+(s/defn draw-cell-backgrounds [g
+                               grid :- g/Grid
+                               cell-size :- g/NonNegativeInt
+                               background :- s/Str
+                               distance-maps :- [DistanceMap]]
+  (doseq [coord (g/grid-coords grid)]
+    (let [{:keys [distances color-family max-distance] :as distance-map} (first (filter #(contains? (:distances %) coord) distance-maps))
+          [y x] (map #(* % cell-size) coord)
+          cell (g/grid-cell grid coord)
+          w (if (g/linked? cell (:east cell)) (inc cell-size) cell-size)
+          h (if (g/linked? cell (:south cell)) (inc cell-size) cell-size)
+          color (if distance-map
+                  (util/make-color max-distance (distances coord) color-family)
+                  background)]
+      (fill-rect g color x y w h))))
+
+(s/defn draw-cell-walls-2 [g
+                           grid :- g/Grid
+                           cell-size :- g/NonNegativeInt
+                           wall :- s/Str]
+  (doseq [coord (g/grid-coords grid)]
     (let [[y1 x1] (map #(* % cell-size) coord)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
           cell (g/grid-cell grid coord)]
-      (draw-fn cell cell-size x1 y1 x2 y2))))
+      (when-not (:north cell) (draw-line g wall x1 y1 x2 y1))
+      (when-not (:west cell) (draw-line g wall x1 y1 x1 y2))
 
-(defn draw-cell-background [g cell cell-size x y _ _]
-  (let [color (:color cell)
-        ;[x w] (if (g/linked? cell (:west cell)) [(dec x) (inc cell-size)] [x cell-size])
-        ;[y h] (if (g/linked? cell (:north cell)) [(dec y) (inc cell-size)] [y cell-size])
-        w (if (g/linked? cell (:east cell)) (inc cell-size) cell-size)
-        h (if (g/linked? cell (:south cell)) (inc cell-size) cell-size)]
-    (when color (fill-rect g color x y w h))))
+      (when-not (g/linked? cell (:east cell)) (draw-line g wall x2 y1 x2 y2))
+      (when-not (g/linked? cell (:south cell)) (draw-line g wall x1 y2 x2 y2)))))
 
-(defn draw-cell-walls [g background wall cell _ x1 y1 x2 y2]
-  (when-not (:north cell) (draw-line g wall x1 y1 x2 y1))
-  (when-not (:west cell) (draw-line g wall x1 y1 x1 y2))
+(defn center [coord cell-size]
+  (map #(+ (* % cell-size) (/ cell-size 2)) (reverse coord)))
 
-  (when-not (g/linked? cell (:east cell)) (draw-line g wall x2 y1 x2 y2))
-  (when-not (g/linked? cell (:south cell)) (draw-line g wall x1 y2 x2 y2)))
+(s/defn draw-path [g
+                   cell-size :- g/NonNegativeInt
+                   path-map :- PathMap]
+  (let [path-distances (:distances path-map)
+        color (util/make-color 1 1 (:color-family path-map))
+        inverted-path-map (set/map-invert (dissoc path-distances :max))
+        path-cells (take-while (complement nil?) (map inverted-path-map (range (:max path-distances) -1 -1)))
+        move-to (fn [g [x y]] (.moveTo g x y))
+        line-to (fn [g [x y]] (.lineTo g x y))]
+    (aset g "strokeStyle" "#f00")
+    (aset g "lineWidth" 2)
+    (.beginPath g)
+    (move-to g (center (first path-cells) cell-size))
+    (doseq [next (rest path-cells)]
+      (line-to g (center next cell-size)))
+    (.stroke g)))
 
-(defn image-grid [g {:keys [rows columns] :as grid} cell-size]
+(s/defn draw-cells-2 [g
+                      grid :- g/Grid
+                      cell-size :- g/NonNegativeInt
+                      background :- s/Str
+                      wall :- s/Str
+                      distance-maps :- [DistanceMap]
+                      path-map :- (s/maybe PathMap)]
+  (draw-cell-backgrounds g grid cell-size background distance-maps)
+  (draw-cell-walls-2 g grid cell-size wall)
+  (when path-map (draw-path g cell-size path-map))
+  )
+
+(s/defn image-grid-2 [g
+                      {:keys [rows columns dist1 dist2 path] :as grid} :- g/Grid
+                      cell-size :- g/NonNegativeInt]
   (let [img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
         background "#fff"
@@ -51,5 +107,6 @@
     (aset g "fillStyle" background)
     (aset g "lineWidth" 0.5)
     (when (g/new? grid) (fill-rect g background 0 0 img-width img-height))
-    (draw-cells grid cell-size (partial draw-cell-background g))
-    (draw-cells grid cell-size (partial draw-cell-walls g background wall))))
+    (draw-cells-2 g grid cell-size background wall (remove nil? [dist2 dist1]) path)
+    )
+  )

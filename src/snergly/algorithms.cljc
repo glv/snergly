@@ -316,5 +316,5 @@
                analysis (assoc analysis :changed-cells (into #{} (filter vector? (keys analysis))))]
            (g/grid-annotate-cells maze
                                   {:label (g/xform-values util/base36 analysis)
-                                   :color (g/xform-values #(util/color-cell (:max analysis) %) analysis)})))))
+                                   :color (g/xform-values #(util/make-color (:max analysis) %) analysis)})))))
    )

@@ -19,16 +19,16 @@
                                           :olive
                                           :light-grey])))
 
-(defn color-cell
+(defn make-color
   ([max-distance distance] (color-cell max-distance distance :green))
-  ([max-distance distance color]
+  ([max-distance distance color-family]
    (let [max-distance-f (float max-distance)
          distance-f (float distance)
          adjusted-distance (min max-distance-f (+ (* distance-f 0.9) (* max-distance-f 0.1)))
          intensity (/ (- max-distance-f adjusted-distance) max-distance-f)
          dark (Math/round (* 255 intensity))
          bright (Math/round (+ 128 (* 127 intensity)))
-         color-pattern (color-families color)
+         color-pattern (color-families color-family)
          rgb (reverse (map (fn [n] (if (bit-test color-pattern n) bright dark)) (range 3)))]
      #?(:clj     (java.awt.Color. (nth rgb 0) (nth rgb 1) (nth rgb 2))
         :cljs    (let [hex2 #(pad 2 "0" (.toString % 16))]

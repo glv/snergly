@@ -38,24 +38,7 @@
 
           :active nil}})
 
-(defn annotate-grid [maze distances color-family]
-  ;; I really need to either:
-  ;;
-  ;; 1. Go ahead and realize the whole sequence and find out what the maximum
-  ;;    distance is before starting the animation.  In fact, I could animate
-  ;;    the whole thing just from that one distances map (each time just
-  ;;    annotate the cells with a given distance value.  But of course, this
-  ;;    strategy depends on how fast the full distances algorithm is, and I
-  ;;    need to do some experiments on that.
-  ;; 2. Choose the max-distance to pass in differently based on what algorithm
-  ;;    was used to generate the maze, in which case I need to do some tests
-  ;;    to see what the max distance is for different algorithms.
-  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell (* (grid/grid-size maze) 0.8) % color-family) distances)}))
-
-(defn annotate-grid-flat [maze distances color-family]
-  (grid/grid-annotate-cells maze {:color (grid/xform-values #(util/color-cell % % color-family) distances)}))
-
-(defn produce-distances-async [{:keys [start-row start-col] :as maze-params} color-family maze]
+(defn produce-distances-async [{:keys [start-row start-col] :as maze-params} grid-key color-family maze]
   (let [prev-distances (:distances maze)
         [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])
         analysis-fn #(algs/distances-seq maze [start-row start-col])
@@ -64,7 +47,10 @@
     (go-loop [grid maze]
              (let [distances (async/<! result-chan)]
                (if distances
-                 (let [grid (assoc (annotate-grid grid distances color-family) :distances distances)]
+                 (let [grid (assoc grid :distances distances
+                                        grid-key {:distances distances
+                                                  :color-family color-family
+                                                  :max-distance (:max distances)})]
                    (set-maze-params! :grid (atom grid))
                    (async/<! (async/timeout 0))
                    (recur grid)))
@@ -79,7 +65,8 @@
     (go-loop [grid maze]
              (let [distances (async/<! result-chan)]
                (if distances
-                 (let [grid (assoc (annotate-grid-flat grid distances :red) :path distances)]
+                 (let [grid (assoc grid :path {:distances distances
+                                               :color-family :red})]
                    (set-maze-params! :grid (atom grid))
                    (async/<! (async/timeout 0))
                    (recur grid)))
@@ -89,11 +76,11 @@
   (println (str "analysis: " analysis))
   (condp = analysis
     "none" []
-    "distances" [(partial produce-distances-async maze-params :green)]
-    "path" [(partial produce-distances-async maze-params :green)
+    "distances" [(partial produce-distances-async maze-params :dist1 :green)]
+    "path" [(partial produce-distances-async maze-params :dist1 :green)
             (partial produce-path-async maze-params false)]
-    "longest path" [(partial produce-distances-async maze-params :green)
-                    (partial produce-distances-async maze-params :blue)
+    "longest path" [(partial produce-distances-async maze-params :dist1 :green)
+                    (partial produce-distances-async maze-params :dist2 :blue)
                     (partial produce-path-async maze-params true)]))
 
 (defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
@@ -189,12 +176,16 @@
     (let [{:keys [grid cell-size] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid g @grid cell-size)))
+      (image/image-grid-2 g @grid cell-size)
+      ;(image/image-grid g @grid cell-size)
+      ))
   (componentDidUpdate [this prev-props prev-state]
     (let [{:keys [grid cell-size] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid g @grid cell-size)))
+      (image/image-grid-2 g @grid cell-size)
+      ;(image/image-grid g @grid cell-size)
+      ))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
