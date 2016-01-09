@@ -8,7 +8,7 @@
 ;;
 ;; Any variable called 'g' is a CanvasRenderingContext2D object.
 
-(def *optimize-drawing* false)
+(def optimize-drawing false)
 
 (defn fill-rect [g style x y w h]
   (aset g "fillStyle" style)
@@ -36,8 +36,10 @@
                                grid :- g/Grid
                                cell-size :- g/NonNegativeInt
                                background :- s/Str
-                               distance-maps :- [DistanceMap]]
-  (doseq [coord (g/grid-coords grid)]
+                               distance-maps :- [DistanceMap]
+                               changed-cells]
+  (println (str "Drawing backgrounds for " (count changed-cells) " cells."))
+  (doseq [coord changed-cells]
     (let [{:keys [distances color-family max-distance] :as distance-map} (first (filter #(contains? (:distances %) coord) distance-maps))
           [y x] (map #(* % cell-size) coord)
           cell (g/grid-cell grid coord)
@@ -51,8 +53,10 @@
 (s/defn draw-cell-walls [g
                          grid :- g/Grid
                          cell-size :- g/NonNegativeInt
-                         wall :- s/Str]
-  (doseq [coord (g/grid-coords grid)]
+                         wall :- s/Str
+                         changed-cells]
+  (println (str "Drawing walls for " (count changed-cells) " cells."))
+  (doseq [coord changed-cells]
     (let [[y1 x1] (map #(* % cell-size) coord)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
           cell (g/grid-cell grid coord)]
@@ -67,7 +71,9 @@
 
 (s/defn draw-path [g
                    cell-size :- g/NonNegativeInt
-                   path-map :- PathMap]
+                   path-map :- PathMap
+                   changed-cells]
+  (println (str "Would draw path for " (count changed-cells) " cells."))
   (let [path-distances (:distances path-map)
         color (util/make-color 1 1 (:color-family path-map))
         inverted-path-map (set/map-invert (dissoc path-distances :max))
@@ -89,21 +95,28 @@
                     wall :- s/Str
                     distance-maps :- [DistanceMap]
                     path-map :- (s/maybe PathMap)]
-  (draw-cell-backgrounds g grid cell-size background distance-maps)
-  (draw-cell-walls g grid cell-size wall)
-  (when path-map (draw-path g cell-size path-map))
-  )
+  (let [changed-cells (or (when-not optimize-drawing (g/grid-coords grid))
+                          (when path-map (:changed-cells (:distances path-map)))
+                          (first (map (comp :changed-cells :distances) distance-maps))
+                          (:changed-cells grid)
+                          (g/grid-coords grid))]
+    (draw-cell-backgrounds g grid cell-size background distance-maps changed-cells)
+    (draw-cell-walls g grid cell-size wall changed-cells)
+    (when path-map (draw-path g cell-size path-map changed-cells))
+  ))
 
 (s/defn image-grid [g
                     {:keys [rows columns dist1 dist2 path] :as grid} :- g/Grid
                     cell-size :- g/NonNegativeInt]
-  (println "image-grid called")
+  (when (nil? (:changed-cells grid)) (println "NIL CHANGED CELLS"))
+  (when (g/new? grid) (println "NEW GRID"))
   (let [img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
         background "#fff"
         wall "#000"
         ;; if we aren't optimizing drawing, discard optimization information
-        grid (if *optimize-drawing* grid (assoc grid :changed-cells nil))]
+        ;grid (if *optimize-drawing* grid (assoc grid :changed-cells nil))
+        ]
     (aset g "imageSmoothingEnabled" false)
     (aset g "fillStyle" background)
     (aset g "lineWidth" 1)
