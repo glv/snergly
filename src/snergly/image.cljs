@@ -106,7 +106,7 @@
         grid (if *optimize-drawing* grid (assoc grid :changed-cells nil))]
     (aset g "imageSmoothingEnabled" false)
     (aset g "fillStyle" background)
-    (aset g "lineWidth" 0.5)
+    (aset g "lineWidth" 1)
     (when (g/new? grid) (fill-rect g background 0 0 img-width img-height))
     (draw-cells g grid cell-size background wall (remove nil? [dist2 dist1]) path)
     )
