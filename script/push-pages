@@ -1,0 +1,3 @@
+#!/bin/sh
+gitrootdir=`git rev-parse --show-toplevel`
+lein cljsbuild once min && (cd "${gitrootdir}/gh-pages" && cp "${gitrootdir}/resources/public/js/compiled/snergly.js" . && git add snergly.js && git commit -m "Update compiled JS bundle" && git push)
