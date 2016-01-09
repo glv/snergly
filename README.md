@@ -3,6 +3,8 @@
 The maze algorithms from Jamis Buck's [Mazes for Programmers][mazes],
 implemented in Clojure.
 
+See it in action at http://glv.github.io/snergly.
+
 I'm doing this as a fun project to improve my Clojure skills.
 
 [mazes]: https://pragprog.com/book/jbmaze/mazes-for-programmers
