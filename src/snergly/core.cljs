@@ -170,21 +170,21 @@
 (defui MazeDisplay
   static om/IQuery
   (query [this]
-    '[{:maze [:grid :rows :columns :cell-size :algorithm :active]}])
+    '[{:maze [:grid :rows :columns :cell-size :algorithm :sync-chan :active]}])
   Object
   (componentDidMount [this]
-    (let [{:keys [grid cell-size] :as maze} (om/props this)
+    (let [{:keys [grid cell-size sync-chan] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid-2 g @grid cell-size)
-      ;(image/image-grid g @grid cell-size)
+      (image/image-grid g @grid cell-size)
+      (go (when sync-chan (async/>! sync-chan true)))
       ))
   (componentDidUpdate [this prev-props prev-state]
-    (let [{:keys [grid cell-size] :as maze} (om/props this)
+    (let [{:keys [grid cell-size sync-chan] :as maze} (om/props this)
           c (.-_canvas this)
           g (.getContext c "2d")]
-      (image/image-grid-2 g @grid cell-size)
-      ;(image/image-grid g @grid cell-size)
+      (image/image-grid g @grid cell-size)
+      (go (when sync-chan (async/>! sync-chan true)))
       ))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]

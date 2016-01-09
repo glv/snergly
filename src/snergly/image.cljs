@@ -8,7 +8,7 @@
 ;;
 ;; Any variable called 'g' is a CanvasRenderingContext2D object.
 
-(def *optimize-drawing* true)
+(def *optimize-drawing* false)
 
 (defn fill-rect [g style x y w h]
   (aset g "fillStyle" style)
@@ -48,10 +48,10 @@
                   background)]
       (fill-rect g color x y w h))))
 
-(s/defn draw-cell-walls-2 [g
-                           grid :- g/Grid
-                           cell-size :- g/NonNegativeInt
-                           wall :- s/Str]
+(s/defn draw-cell-walls [g
+                         grid :- g/Grid
+                         cell-size :- g/NonNegativeInt
+                         wall :- s/Str]
   (doseq [coord (g/grid-coords grid)]
     (let [[y1 x1] (map #(* % cell-size) coord)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
@@ -82,21 +82,21 @@
       (line-to g (center next cell-size)))
     (.stroke g)))
 
-(s/defn draw-cells-2 [g
-                      grid :- g/Grid
-                      cell-size :- g/NonNegativeInt
-                      background :- s/Str
-                      wall :- s/Str
-                      distance-maps :- [DistanceMap]
-                      path-map :- (s/maybe PathMap)]
+(s/defn draw-cells [g
+                    grid :- g/Grid
+                    cell-size :- g/NonNegativeInt
+                    background :- s/Str
+                    wall :- s/Str
+                    distance-maps :- [DistanceMap]
+                    path-map :- (s/maybe PathMap)]
   (draw-cell-backgrounds g grid cell-size background distance-maps)
-  (draw-cell-walls-2 g grid cell-size wall)
+  (draw-cell-walls g grid cell-size wall)
   (when path-map (draw-path g cell-size path-map))
   )
 
-(s/defn image-grid-2 [g
-                      {:keys [rows columns dist1 dist2 path] :as grid} :- g/Grid
-                      cell-size :- g/NonNegativeInt]
+(s/defn image-grid [g
+                    {:keys [rows columns dist1 dist2 path] :as grid} :- g/Grid
+                    cell-size :- g/NonNegativeInt]
   (let [img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
         background "#fff"
@@ -107,6 +107,6 @@
     (aset g "fillStyle" background)
     (aset g "lineWidth" 0.5)
     (when (g/new? grid) (fill-rect g background 0 0 img-width img-height))
-    (draw-cells-2 g grid cell-size background wall (remove nil? [dist2 dist1]) path)
+    (draw-cells g grid cell-size background wall (remove nil? [dist2 dist1]) path)
     )
   )

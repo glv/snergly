@@ -294,6 +294,7 @@
    "wilsons" wilsons-seq
    "hunt-and-kill" hunt-and-kill-seq
    "recursive-backtracker" recursive-backtracker-seq
+   "pessimal" pessimal-seq
    })
 
 #?(:clj
