@@ -126,10 +126,9 @@
 
 (defmethod read :default
   [{:keys [state] :as env} key params]
-  (let [st @state]
-    (if-let [[_ value] (find st key)]
+    (if-let [value (@state key)]
       {:value value}
-      {:value :not-found})))
+      {:value :not-found}))
 
 (defmulti produce-maze-value (fn [k v s] k))
 
