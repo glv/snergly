@@ -15,6 +15,8 @@
 
 (declare reconciler)
 
+(def sync-by-frame true)
+
 (defn set-maze-params! [& kvpairs]
   (assert (= 0 (mod (count kvpairs) 2)) "Arguments must be pairs of keys and values")
   (om/transact! reconciler
@@ -31,20 +33,26 @@
   {:app/algorithms (sort algs/algorithm-names)
    :app/analyses ["none" "distances" "path" "longest path"]
    :maze {:algorithm ""
-          :rows 10
-          :columns 10
+          :rows      10
+          :columns   10
           :cell-size 10
-          :grid nil
+          :grid      nil
+          :anim-chan (async/chan)
 
-          :analysis "none"
+          :analysis  "none"
           :start-row 0
           :start-col 0
-          :end-row 0
-          :end-col 0
+          :end-row   0
+          :end-col   0
 
-          :active nil}})
+          :active    nil}})
 
-(defn produce-distances-async [{:keys [start-row start-col] :as maze-params} grid-key color-family maze]
+(defn sync-chan [frame-chan]
+  (if sync-by-frame
+    frame-chan
+    (async/timeout 0)))
+
+(defn produce-distances-async [{:keys [start-row start-col anim-chan] :as maze-params} grid-key color-family maze]
   (let [prev-distances (:distances maze)
         [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])
         analysis-fn #(algs/distances-seq maze [start-row start-col])
@@ -58,11 +66,11 @@
                                                   :color-family color-family
                                                   :max-distance (:max distances)})]
                    (set-maze-params! :grid (atom grid))
-                   (async/<! (async/timeout 0))
+                   (async/<! (sync-chan anim-chan))
                    (recur grid)))
                grid))))
 
-(defn produce-path-async [{:keys [end-row end-col] :as maze-params} longest? maze]
+(defn produce-path-async [{:keys [end-row end-col anim-chan] :as maze-params} longest? maze]
   (let [prev-distances (:distances maze)
         [end-row end-col] (if longest? (:max-coord prev-distances) [end-row end-col])
         analysis-fn #(algs/path-seq maze prev-distances [end-row end-col])
@@ -74,7 +82,7 @@
                  (let [grid (assoc grid :path {:distances distances
                                                :color-family :red})]
                    (set-maze-params! :grid (atom grid))
-                   (async/<! (async/timeout 0))
+                   (async/<! (sync-chan anim-chan))
                    (recur grid)))
                grid))))
 
@@ -89,7 +97,7 @@
                     (partial produce-distances-async maze-params :dist2 :blue)
                     (partial produce-path-async maze-params true)]))
 
-(defn produce-maze-async [{:keys [rows columns algorithm] :as maze-params}]
+(defn produce-maze-async [{:keys [rows columns algorithm anim-chan] :as maze-params}]
   (println (str "algorithm: " algorithm))
   (set-maze-params! :active "Carving maze …")
   (let [grid (grid/make-grid rows columns)
@@ -97,12 +105,12 @@
         result-chan (algs/seq-channel algorithm-fn)]
     (go
       (set-maze-params! :grid (atom grid))
-      (async/<! (async/timeout 0))
+      (async/<! (sync-chan anim-chan))
       (loop [prev-maze nil]
         (if-let [new-maze (async/<! result-chan)]
           (do
             (set-maze-params! :grid (atom new-maze))
-            (async/<! (async/timeout 0))
+            (async/<! (sync-chan anim-chan))
             (recur new-maze))
           (do
             (set-maze-params! :active nil)
@@ -151,6 +159,10 @@
   [_ form-value _]
   form-value)
 
+(defmethod produce-maze-value :anim-chan
+  [_ form-value _]
+  form-value)
+
 (defmethod produce-maze-value :grid
   [_ new-value {:keys [maze] :as state}]
   (let [{:keys [algorithm rows columns grid]} maze]
@@ -175,23 +187,21 @@
 (defui MazeDisplay
   static om/IQuery
   (query [this]
-    '[{:maze [:grid :rows :columns :cell-size :algorithm :active]}])
+    '[{:maze [:grid :rows :columns :cell-size :algorithm :active :anim-chan]}])
   Object
   (componentDidMount [this]
-    (println "componentDidMount called.")
-    (let [{:keys [grid cell-size sync-chan] :as maze} (om/props this)
+    (let [{:keys [grid cell-size anim-chan] :as maze} (om/props this)
           c @thecanvas
           g (.getContext c "2d")]
       (image/image-grid g @grid cell-size)
-      ; (go (when sync-chan (async/>! sync-chan true)))
+      (go (async/>! anim-chan true))
       ))
   (componentDidUpdate [this prev-props prev-state]
-    (println "componentDidUpdate called.")
-    (let [{:keys [grid cell-size sync-chan] :as maze} (om/props this)
+    (let [{:keys [grid cell-size anim-chan] :as maze} (om/props this)
           c @thecanvas
           g (.getContext c "2d")]
       (image/image-grid g @grid cell-size)
-      ; (go (when sync-chan (async/>! sync-chan true)))
+      (go (async/>! anim-chan true))
       ))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
