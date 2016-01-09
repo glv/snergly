@@ -21,6 +21,12 @@
                 (mapv (fn [[k v]] `(snergly.core/set-maze {:maze-key ~k :value ~v}))
                       (partition 2 kvpairs))))
 
+;; I shouldn't have to do this; the "right way", apparently, is to set the
+;; ref as a property on the component.  And that works great in figwheel
+;; development mode, but in a production build with optimizations on, it
+;; doesn't work at all.  This is the only way I've been able to work in both.
+(def thecanvas (atom nil))
+
 (def init-data
   {:app/algorithms (sort algs/algorithm-names)
    :app/analyses ["none" "distances" "path" "longest path"]
@@ -170,21 +176,23 @@
 (defui MazeDisplay
   static om/IQuery
   (query [this]
-    '[{:maze [:grid :rows :columns :cell-size :algorithm :sync-chan :active]}])
+    '[{:maze [:grid :rows :columns :cell-size :algorithm :active]}])
   Object
   (componentDidMount [this]
+    (println "componentDidMount called.")
     (let [{:keys [grid cell-size sync-chan] :as maze} (om/props this)
-          c (.-_canvas this)
+          c @thecanvas
           g (.getContext c "2d")]
       (image/image-grid g @grid cell-size)
-      (go (when sync-chan (async/>! sync-chan true)))
+      ; (go (when sync-chan (async/>! sync-chan true)))
       ))
   (componentDidUpdate [this prev-props prev-state]
+    (println "componentDidUpdate called.")
     (let [{:keys [grid cell-size sync-chan] :as maze} (om/props this)
-          c (.-_canvas this)
+          c @thecanvas
           g (.getContext c "2d")]
       (image/image-grid g @grid cell-size)
-      (go (when sync-chan (async/>! sync-chan true)))
+      ; (go (when sync-chan (async/>! sync-chan true)))
       ))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
@@ -195,7 +203,9 @@
                  (dom/canvas #js {:id "c1"
                                   :height height
                                   :width width
-                                  :ref #(aset this "_canvas" %)})
+                                  :ref (fn [c]
+                                         (when-not (nil? c)
+                                           (reset! thecanvas c)))})
                             )))))
 
 (def maze-display (om/factory MazeDisplay))

@@ -97,6 +97,7 @@
 (s/defn image-grid [g
                     {:keys [rows columns dist1 dist2 path] :as grid} :- g/Grid
                     cell-size :- g/NonNegativeInt]
+  (println "image-grid called")
   (let [img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
         background "#fff"

@@ -20,7 +20,7 @@
                                           :light-grey])))
 
 (defn make-color
-  ([max-distance distance] (color-cell max-distance distance :green))
+  ([max-distance distance] (make-color max-distance distance :green))
   ([max-distance distance color-family]
    (let [max-distance-f (float max-distance)
          distance-f (float distance)
