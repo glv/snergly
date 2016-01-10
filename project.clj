@@ -5,7 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :main ^:skip-aot snergly.core
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/clojurescript "1.7.170"]
+                 [org.clojure/clojurescript "1.7.228"]
                  [org.clojure/tools.cli "0.3.3"]
                  [org.clojure/core.async "0.2.374"]
                  ;[sablono "0.4.0"]
@@ -18,7 +18,7 @@
                  ;[datascript "0.13.1"] ; just to download
                  [figwheel-sidecar "0.5.0-SNAPSHOT" :scope "test"]
                  ]
-  :plugins [[lein-cljsbuild "1.1.1"]
+  :plugins [[lein-cljsbuild "1.1.2"]
             [lein-figwheel "0.5.0-2"] ; may require reversion to old version
             ;[figwheel-sidecar "0.5.0-SNAPSHOT" :scope "test"] ; just to download
             ]
@@ -39,6 +39,7 @@
                         :compiler {:output-to "resources/public/js/compiled/snergly.js"
                                    :main snergly.core
                                    :optimizations :advanced
+                                   :parallel-build true
                                    :pretty-print false}}]}
   :figwheel {;; :http-server-root "public" ;; default and assumes "resources"
              ;; :server-port 3449 ;; default
