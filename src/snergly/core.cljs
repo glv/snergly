@@ -65,7 +65,7 @@
                  (let [grid (assoc grid :distances distances
                                         grid-key {:distances distances
                                                   :color-family color-family
-                                                  :max-distance (:max distances)})]
+                                                  :expected-max-distance (* (grid/grid-size grid) 0.8)})]
                    (set-maze-params! :grid (atom grid))
                    (async/<! (sync-chan anim-chan))
                    (recur grid)))

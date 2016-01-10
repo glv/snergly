@@ -37,7 +37,7 @@
   "Schema for Distances with rendering info"
   {:distances g/Distances
    :color-family s/Keyword
-   :max-distance s/Int})
+   :expected-max-distance s/Int})
 
 (def PathMap
   "Schema for Path with rendering info"
@@ -53,13 +53,14 @@
                                distance-maps :- [DistanceMap]
                                changed-cells]
   (doseq [coord changed-cells]
-    (let [{:keys [distances color-family max-distance] :as distance-map} (first (filter #(contains? (:distances %) coord) distance-maps))
+    (let [{:keys [distances color-family expected-max-distance] :as distance-map} (first (filter #(contains? (:distances %) coord) distance-maps))
           [y x] (map #(* % cell-size) coord)
           cell (g/grid-cell grid coord)
           x (if (g/linked? cell (:west cell)) (- x 0.5) x)
           y (if (g/linked? cell (:north cell)) (- y 0.5) y)
           w (if (g/linked? cell (:east cell)) (+ cell-size 0.5) cell-size)
           h (if (g/linked? cell (:south cell)) (+ cell-size 0.5) cell-size)
+          max-distance (if (:max-coord distances) (:max distances) expected-max-distance)
           color (if distance-map
                   (util/make-color max-distance (distances coord) color-family)
                   background)]
