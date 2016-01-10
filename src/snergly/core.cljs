@@ -139,7 +139,10 @@
       {:value value}
       {:value :not-found}))
 
-(defmulti produce-maze-value (fn [k v s] k))
+(defmulti produce-maze-value (fn [k v s] (keyword "snergly.core" (name k))))
+
+(run! #(derive % ::integer)
+      [::rows ::columns ::cell-size ::start-row ::start-col ::end-row ::end-col])
 
 (defn mutate [{:keys [state] :as env} key {:keys [maze-key value] :as params}]
   (if (= 'snergly.core/set-maze key)
@@ -148,28 +151,11 @@
        :action #(swap! state assoc-in [:maze maze-key] new-value)})
     {:value nil}))
 
-(defmethod produce-maze-value :algorithm
-  [_ form-value _]
-  form-value)
-
-(defmethod produce-maze-value :analysis
-  [_ form-value _]
-  form-value)
-
-(defmethod produce-maze-value :active
-  [_ form-value _]
-  form-value)
-
-(defmethod produce-maze-value :anim-chan
-  [_ form-value _]
-  form-value)
-
-(defmethod produce-maze-value :grid
-  [_ new-value {:keys [maze] :as state}]
-  (let [{:keys [algorithm rows columns grid]} maze]
-    new-value))
-
 (defmethod produce-maze-value :default
+  [_ form-value _]
+  form-value)
+
+(defmethod produce-maze-value ::integer
   [_ form-value _]
   (js/parseInt form-value))
 
@@ -202,7 +188,7 @@
   Object
   (componentDidMount [this]
     (handle-maze-change this))
-  (componentDidUpdate [this prev-props prev-state]
+  (componentDidUpdate [this _ _]
     (handle-maze-change this))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
