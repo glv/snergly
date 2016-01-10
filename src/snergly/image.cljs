@@ -8,7 +8,19 @@
 ;;
 ;; Any variable called 'g' is a CanvasRenderingContext2D object.
 
-(def optimize-drawing false)
+(def optimize-drawing true)
+
+;; To debug the optimized drawing:
+;; * set snergly.image/optimize-drawing to true
+;; * set snergly.core/sync-by-frame to false
+;; * in snergly.core/sync-chan, change the parameter of async/timeout
+;;   from 0 to 1000.
+;;
+;; When I do this, I can tell that the cell background starts too far up
+;; and to the left, so that redrawing the background makes the top and left
+;; borders half-width.  And the right and left borders, if they are drawn,
+;; become progressively thicker; I think this is just because of the canvas
+;; drawing strokes with translucency for some reason, even
 
 (defn fill-rect [g style x y w h]
   (aset g "fillStyle" style)
@@ -32,19 +44,22 @@
   {:distances g/Distances
    :color-family s/Keyword})
 
+(def strokewidth 1.0)
+
 (s/defn draw-cell-backgrounds [g
                                grid :- g/Grid
                                cell-size :- g/NonNegativeInt
                                background :- s/Str
                                distance-maps :- [DistanceMap]
                                changed-cells]
-  (println (str "Drawing backgrounds for " (count changed-cells) " cells."))
   (doseq [coord changed-cells]
     (let [{:keys [distances color-family max-distance] :as distance-map} (first (filter #(contains? (:distances %) coord) distance-maps))
           [y x] (map #(* % cell-size) coord)
           cell (g/grid-cell grid coord)
-          w (if (g/linked? cell (:east cell)) (inc cell-size) cell-size)
-          h (if (g/linked? cell (:south cell)) (inc cell-size) cell-size)
+          x (if (g/linked? cell (:west cell)) (- x 0.5) x)
+          y (if (g/linked? cell (:north cell)) (- y 0.5) y)
+          w (if (g/linked? cell (:east cell)) (+ cell-size 0.5) cell-size)
+          h (if (g/linked? cell (:south cell)) (+ cell-size 0.5) cell-size)
           color (if distance-map
                   (util/make-color max-distance (distances coord) color-family)
                   background)]
@@ -55,7 +70,6 @@
                          cell-size :- g/NonNegativeInt
                          wall :- s/Str
                          changed-cells]
-  (println (str "Drawing walls for " (count changed-cells) " cells."))
   (doseq [coord changed-cells]
     (let [[y1 x1] (map #(* % cell-size) coord)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
@@ -95,11 +109,11 @@
                     wall :- s/Str
                     distance-maps :- [DistanceMap]
                     path-map :- (s/maybe PathMap)]
-  (let [changed-cells (or (when-not optimize-drawing (g/grid-coords grid))
+  (let [changed-cells (or (when-not optimize-drawing (set (g/grid-coords grid)))
                           (when path-map (:changed-cells (:distances path-map)))
                           (first (map (comp :changed-cells :distances) distance-maps))
                           (:changed-cells grid)
-                          (g/grid-coords grid))]
+                          (set (g/grid-coords grid)))]
     (draw-cell-backgrounds g grid cell-size background distance-maps changed-cells)
     (draw-cell-walls g grid cell-size wall changed-cells)
     (when path-map (draw-path g cell-size path-map changed-cells))
@@ -119,7 +133,7 @@
         ]
     (aset g "imageSmoothingEnabled" false)
     (aset g "fillStyle" background)
-    (aset g "lineWidth" 1)
+    (aset g "lineWidth" strokewidth)
     (when (g/new? grid) (fill-rect g background 0 0 img-width img-height))
     (draw-cells g grid cell-size background wall (remove nil? [dist2 dist1]) path)
     )
