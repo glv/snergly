@@ -185,25 +185,25 @@
            (not= rows (:rows grid))
            (not= columns (:columns grid)))))
 
+(defn handle-maze-change [component]
+  (let [{:keys [grid cell-size anim-chan active] :as maze} (om/props component)]
+    (when-not (nil? active)
+      (let [c @thecanvas
+            g (.getContext c "2d")]
+        (go
+          (image/image-grid g @grid cell-size)
+          (async/>! anim-chan true))
+        ))))
+
 (defui MazeDisplay
   static om/IQuery
   (query [this]
     '[{:maze [:grid :rows :columns :cell-size :algorithm :active :anim-chan]}])
   Object
   (componentDidMount [this]
-    (let [{:keys [grid cell-size anim-chan] :as maze} (om/props this)
-          c @thecanvas
-          g (.getContext c "2d")]
-      (image/image-grid g @grid cell-size)
-      (go (async/>! anim-chan true))
-      ))
+    (handle-maze-change this))
   (componentDidUpdate [this prev-props prev-state]
-    (let [{:keys [grid cell-size anim-chan] :as maze} (om/props this)
-          c @thecanvas
-          g (.getContext c "2d")]
-      (image/image-grid g @grid cell-size)
-      (go (async/>! anim-chan true))
-      ))
+    (handle-maze-change this))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
