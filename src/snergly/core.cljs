@@ -26,7 +26,8 @@
 ;; I shouldn't have to do this; the "right way", apparently, is to set the
 ;; ref as a property on the component.  And that works great in figwheel
 ;; development mode, but in a production build with optimizations on, it
-;; doesn't work at all.  This is the only way I've been able to work in both.
+;; doesn't work at all.  This is the only way I've been able to get it to
+;; work in both.
 (def thecanvas (atom nil))
 
 (def init-data
@@ -86,7 +87,7 @@
                    (recur grid)))
                grid))))
 
-(defn analysis-steps [{:keys [analysis start-row start-col end-row end-col] :as maze-params}]
+(defn analysis-steps [{:keys [analysis] :as maze-params}]
   (println (str "analysis: " analysis))
   (condp = analysis
     "none" []
