@@ -8,7 +8,7 @@
 ;;
 ;; Any variable called 'g' is a CanvasRenderingContext2D object.
 
-(def optimize-drawing true)
+(def optimize-drawing false)
 
 ;; To debug the optimized drawing:
 ;; * set snergly.image/optimize-drawing to true
