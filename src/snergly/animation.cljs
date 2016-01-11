@@ -11,7 +11,7 @@
 ;; separate namespace.  This code is going to change a lot, and I'll work on
 ;; finding a better way after the next round of design revisions.
 
-(def sync-by-frame true)
+(def sync-by-frame false)
 
 (defn sync-chan [frame-chan]
   (if sync-by-frame
@@ -21,20 +21,19 @@
 (defn produce-distances-async [{:keys [start-row start-col anim-chan] :as maze-params} set-maze-params! grid-key color-family maze]
   (let [prev-distances (:distances maze)
         [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])
-        analysis-fn #(algs/distances-seq maze [start-row start-col])
-        result-chan (algs/seq-channel analysis-fn)]
+        analysis-fn #(algs/distances-seq maze [start-row start-col])]
     (set-maze-params! :active "Finding distances …")
-    (go-loop [grid maze]
-             (let [distances (async/<! result-chan)]
-               (if distances
-                 (let [grid (assoc grid :distances distances
-                                        grid-key {:distances distances
-                                                  :color-family color-family
-                                                  :expected-max-distance (* (grid/grid-size grid) 0.8)})]
-                   (set-maze-params! :grid (atom grid))
-                   (async/<! (sync-chan anim-chan))
-                   (recur grid)))
-               grid))))
+    (go-loop [maze maze
+              [dist & dists] (analysis-fn)]
+             (if dist
+               (let [maze (assoc maze :distances dist
+                                      grid-key {:distances dist
+                                                :color-family color-family
+                                                :expected-max-distance (* (grid/grid-size maze) 0.8)})]
+                 (set-maze-params! :grid (atom maze))
+                 (async/<! (sync-chan anim-chan))
+                 (recur maze dists))
+               maze))))
 
 (defn produce-path-async [{:keys [end-row end-col anim-chan] :as maze-params} set-maze-params! longest? maze]
   (let [prev-distances (:distances maze)
@@ -42,15 +41,15 @@
         analysis-fn #(algs/path-seq maze prev-distances [end-row end-col])
         result-chan (algs/seq-channel analysis-fn)]
     (set-maze-params! :active (str "Plotting path (" (inc (:max prev-distances)) " cells long) …"))
-    (go-loop [grid maze]
-             (let [distances (async/<! result-chan)]
-               (if distances
-                 (let [grid (assoc grid :path {:distances distances
-                                               :color-family :red})]
-                   (set-maze-params! :grid (atom grid))
-                   (async/<! (sync-chan anim-chan))
-                   (recur grid)))
-               grid))))
+    (go-loop [maze maze
+              [dist & dists] (analysis-fn)]
+             (if dist
+               (let [maze (assoc maze :path {:distances dist
+                                             :color-family :red})]
+                 (set-maze-params! :grid (atom maze))
+                 (async/<! (sync-chan anim-chan))
+                 (recur maze dists))
+               maze))))
 
 (defn analysis-steps [{:keys [analysis] :as maze-params} set-maze-params!]
   (println (str "analysis: " analysis))
@@ -67,17 +66,17 @@
   (println (str "algorithm: " algorithm))
   (set-maze-params! :active "Carving maze …")
   (let [grid (grid/make-grid rows columns)
-        algorithm-fn #((algs/algorithm-functions algorithm) grid)
-        result-chan (algs/seq-channel algorithm-fn)]
+        algorithm-fn #((algs/algorithm-functions algorithm) grid)]
     (go
       (set-maze-params! :grid (atom grid))
       (async/<! (sync-chan anim-chan))
-      (loop [prev-maze nil]
-        (if-let [new-maze (async/<! result-chan)]
+      (loop [prev-maze nil
+             [maze & mazes] (sequence (comp (dedupe) (filter grid/changed?)) (algorithm-fn))]
+        (if maze
           (do
-            (set-maze-params! :grid (atom new-maze))
+            (set-maze-params! :grid (atom maze))
             (async/<! (sync-chan anim-chan))
-            (recur new-maze))
+            (recur maze mazes))
           (do
             (set-maze-params! :active nil)
             prev-maze))))))

@@ -37,20 +37,3 @@
 (defn base36 [num]
   #?(:clj (java.lang.Integer/toString num 36)
      :cljs (.toString num 36)))
-
-;; This is from clojure.core.async.lab, and is not available in the cljs
-;; version of core.async.  But it works fine and it's exactly what I need.
-(defn spool
-  "Take a sequence and puts each value on a channel and returns the channel.
-   If no channel is provided, an unbuffered channel is created. If the
-   sequence ends, the channel is closed."
-  ([s c]
-   (go-loop [[f & r] s]
-     (if f
-       (do
-         (async/>! c f)
-         (recur r))
-       (async/close! c)))
-   c)
-  ([s]
-   (spool s (async/chan))))
