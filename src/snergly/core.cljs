@@ -3,19 +3,14 @@
   (:require [cljs.core.async :as async]
             [goog.dom :as gdom]
             [om.next :as om :refer-macros [defui]]
-            [om.core :as omcore]
             [om.dom :as dom]
             [snergly.algorithms :as algs]
-            [snergly.grid :as grid]
-            [snergly.util :as util]
-            [snergly.image :as image]
+            [snergly.animation :as anim]
             ))
 
 (enable-console-print!)
 
 (declare reconciler)
-
-(def sync-by-frame true)
 
 (defn set-maze-params! [& kvpairs]
   (assert (= 0 (mod (count kvpairs) 2)) "Arguments must be pairs of keys and values")
@@ -47,86 +42,6 @@
           :end-col   0
 
           :active    nil}})
-
-(defn sync-chan [frame-chan]
-  (if sync-by-frame
-    frame-chan
-    (async/timeout 0)))
-
-(defn produce-distances-async [{:keys [start-row start-col anim-chan] :as maze-params} grid-key color-family maze]
-  (let [prev-distances (:distances maze)
-        [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])
-        analysis-fn #(algs/distances-seq maze [start-row start-col])
-        result-chan (algs/seq-channel analysis-fn)]
-    (set-maze-params! :active "Finding distances …")
-    (go-loop [grid maze]
-             (let [distances (async/<! result-chan)]
-               (if distances
-                 (let [grid (assoc grid :distances distances
-                                        grid-key {:distances distances
-                                                  :color-family color-family
-                                                  :expected-max-distance (* (grid/grid-size grid) 0.8)})]
-                   (set-maze-params! :grid (atom grid))
-                   (async/<! (sync-chan anim-chan))
-                   (recur grid)))
-               grid))))
-
-(defn produce-path-async [{:keys [end-row end-col anim-chan] :as maze-params} longest? maze]
-  (let [prev-distances (:distances maze)
-        [end-row end-col] (if longest? (:max-coord prev-distances) [end-row end-col])
-        analysis-fn #(algs/path-seq maze prev-distances [end-row end-col])
-        result-chan (algs/seq-channel analysis-fn)]
-    (set-maze-params! :active (str "Plotting path (" (inc (:max prev-distances)) " cells long) …"))
-    (go-loop [grid maze]
-             (let [distances (async/<! result-chan)]
-               (if distances
-                 (let [grid (assoc grid :path {:distances distances
-                                               :color-family :red})]
-                   (set-maze-params! :grid (atom grid))
-                   (async/<! (sync-chan anim-chan))
-                   (recur grid)))
-               grid))))
-
-(defn analysis-steps [{:keys [analysis] :as maze-params}]
-  (println (str "analysis: " analysis))
-  (condp = analysis
-    "none" []
-    "distances" [(partial produce-distances-async maze-params :dist1 :green)]
-    "path" [(partial produce-distances-async maze-params :dist1 :green)
-            (partial produce-path-async maze-params false)]
-    "longest path" [(partial produce-distances-async maze-params :dist1 :green)
-                    (partial produce-distances-async maze-params :dist2 :blue)
-                    (partial produce-path-async maze-params true)]))
-
-(defn produce-maze-async [{:keys [rows columns algorithm anim-chan] :as maze-params}]
-  (println (str "algorithm: " algorithm))
-  (set-maze-params! :active "Carving maze …")
-  (let [grid (grid/make-grid rows columns)
-        algorithm-fn #((algs/algorithm-functions algorithm) grid)
-        result-chan (algs/seq-channel algorithm-fn)]
-    (go
-      (set-maze-params! :grid (atom grid))
-      (async/<! (sync-chan anim-chan))
-      (loop [prev-maze nil]
-        (if-let [new-maze (async/<! result-chan)]
-          (do
-            (set-maze-params! :grid (atom new-maze))
-            (async/<! (sync-chan anim-chan))
-            (recur new-maze))
-          (do
-            (set-maze-params! :active nil)
-            prev-maze))))))
-
-(defn run-animation [maze-params]
-  (let [steps (cons (fn [_] (produce-maze-async maze-params))
-                    (analysis-steps maze-params))]
-    (go
-      (loop [grid nil
-             [step & steps] steps]
-        (when step
-          (recur (async/<! (step grid))
-                 steps)))
-      (set-maze-params! :active nil))))
 
 ;; -----------------------------------------------------------------------------
 ;; Parsing
@@ -171,25 +86,15 @@
            (not= rows (:rows grid))
            (not= columns (:columns grid)))))
 
-(defn handle-maze-change [component]
-  (let [{:keys [grid cell-size anim-chan active] :as maze} (om/props component)]
-    (when-not (nil? active)
-      (let [c @thecanvas
-            g (.getContext c "2d")]
-        (go
-          (image/image-grid g @grid cell-size)
-          (async/>! anim-chan true))
-        ))))
-
 (defui MazeDisplay
   static om/IQuery
   (query [this]
     '[{:maze [:grid :rows :columns :cell-size :algorithm :active :anim-chan]}])
   Object
   (componentDidMount [this]
-    (handle-maze-change this))
+    (anim/handle-maze-change (om/props this) @thecanvas))
   (componentDidUpdate [this _ _]
-    (handle-maze-change this))
+    (anim/handle-maze-change (om/props this) @thecanvas))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
@@ -221,7 +126,7 @@
                   active]} maze
           modify (fn [maze-key e]
                    (om/transact! this `[(snergly.core/set-maze {:maze-key ~maze-key :value ~(aget e "target" "value")})]))
-          go-async (fn [maze e] (run-animation maze))]
+          go-async (fn [maze e] (anim/run-animation maze set-maze-params!))]
       ;; TODO: remember how to disable form elements by group, rather than one-at-a-time.
       ;; TODO: when rows/cols are reduced, adjust analysis params downward if necessary.
       (dom/div
