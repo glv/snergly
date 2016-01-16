@@ -16,7 +16,26 @@
 (defn sync-chan [frame-chan]
   (if sync-by-frame
     frame-chan
+    ;; this works, but dumps a lot of error messages to the console because
+    ;; it can't accept puts.
     (async/timeout 0)))
+
+;; I don't know for sure which namespace this should go in, but I know I'm
+;; gonna need it, so I'm exploring the code here.
+;;
+;; (Also, it should really be a macro so that the pieces don't have to be
+;; wrapped in functions, and so that the tail of each sequence can be threaded
+;; in as the first argument of the next producer.)
+;;
+;; Name words: progression, intremental, tail-to-head,
+
+(defn tail-to-head [& funcs]
+  ;; each of these things is going to generate a lazy sequence, but the nth
+  ;; needs the last element of the n-1th to start it off.  So I want the result
+  ;; of this to be a lazy sequence that's the concatenation of the other
+  ;; sequences, but that means capturing the tail of each and passing it to
+  ;; the next function to start the next sequence.
+  )
 
 (defn produce-distances-async [{:keys [start-row start-col anim-chan] :as maze-params} set-maze-params! grid-key color-family maze]
   (let [prev-distances (:distances maze)
