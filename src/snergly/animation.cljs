@@ -3,13 +3,8 @@
   (:require [cljs.core.async :as async]
             [snergly.algorithms :as algs]
             [snergly.grid :as grid]
-            [snergly.image :as image]))
-
-;; I really hate having to pass set-maze-params! in here and pass it around
-;; everywhere, but it's the expedient way at the moment to avoid a circular
-;; namespace dependency now that I've pulled the animation code out into a
-;; separate namespace.  This code is going to change a lot, and I'll work on
-;; finding a better way after the next round of design revisions.
+            [snergly.image :as image]
+            [snergly.protocols :as protocols]))
 
 (def sync-by-frame false)
 
@@ -100,9 +95,9 @@
             (set-maze-params! :active nil)
             prev-maze))))))
 
-(defn run-animation [maze-params set-maze-params!]
-  (let [steps (cons (fn [_] (produce-maze-async maze-params set-maze-params!))
-                    (analysis-steps maze-params set-maze-params!))]
+(defn run-animation [maze-params frame-chan]
+  (let [steps (cons (fn [_] (produce-maze-async maze-params frame-chan))
+                    (analysis-steps maze-params frame-chan))]
     (go
       (loop [grid nil
              [step & steps] steps]
@@ -111,10 +106,24 @@
                  steps)))
       (set-maze-params! :active nil))))
 
-(defn handle-maze-change [{:keys [grid cell-size anim-chan active] :as maze} canvas]
+(defn handle-maze-change [{:keys [grid cell-size anim-chan active] :as maze} canvas frame-chan]
   (when-not (nil? active)
     (let [g (.getContext canvas "2d")]
       (go
         (image/image-grid g @grid cell-size)
-        (async/>! anim-chan true))
+        (when sync-by-frame (async/>! frame-chan true)))
       )))
+
+(defrecord AsyncAnimator [chan]
+  protocols/Animator
+  (start-animation [this maze-params] (run-animation maze-params (:chan this)))
+  (animate-frame [this maze-params canvas] (handle-maze-change maze-params canvas (:chan this))))
+
+(def animator (->AsyncAnimator (if sync-by-frame
+                                 (async/chan)
+                                 (async/timeout 0))))
+
+;(def animator
+;  (reify protocols/Animator
+;    (start-animation [maze-params] (run-animation maze-params))
+;    (animate-frame [maze-params canvas] (handle-maze-change maze-params canvas))))

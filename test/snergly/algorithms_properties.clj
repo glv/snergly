@@ -57,6 +57,11 @@
                                     (gen/choose 0 (dec (:rows grid)))
                                     (gen/choose 0 (dec (:columns grid))))))))
 
+(def gen-maze-and-coord-derived
+  (gen/bind gen-maze-and-coord
+            (fn [[grid coord]] (gen/tuple (gen/return (last (binary-tree-seq grid)))
+                                          (gen/return coord)))))
+
 ;; -----------------------------------------------------------------------------
 ;; Utility and validation functions
 
