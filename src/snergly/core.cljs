@@ -13,9 +13,9 @@
 
 (declare reconciler)
 
-(defn set-maze-params! [& kvpairs]
+(defn set-maze-params! [r-or-c & kvpairs]
   (assert (= 0 (mod (count kvpairs) 2)) "Arguments must be pairs of keys and values")
-  (om/transact! reconciler
+  (om/transact! r-or-c
                 (mapv (fn [[k v]] `(snergly.core/set-maze {:maze-key ~k :value ~v}))
                       (partition 2 kvpairs))))
 
@@ -23,8 +23,9 @@
   (reify protocols/UI
     (report-status [_ msg]
       (println (str "STATUS CHANGE: " msg))
-      (set-maze-params! :active msg))
-    (report-update [_ msg grid] (set-maze-params! :active msg :grid grid))))
+      (set-maze-params! reconciler :active msg))
+    (report-update [_ msg grid]
+      (set-maze-params! reconciler :active msg :grid grid))))
 
 ;; I shouldn't have to do this; the "right way", apparently, is to set the
 ;; ref as a property on the component.  And that works great in figwheel
@@ -132,7 +133,7 @@
                   analysis start-row start-col end-row end-col
                   active]} maze
           modify (fn [maze-key e]
-                   (om/transact! this `[(snergly.core/set-maze {:maze-key ~maze-key :value ~(aget e "target" "value")})]))
+                   (set-maze-params! this maze-key (aget e "target" "value")))
           go-async (fn [maze e]
                      (println (str "maze: " maze))
                      (protocols/start-animation (:animator maze) maze ui))
