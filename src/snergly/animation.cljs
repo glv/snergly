@@ -48,9 +48,6 @@
   (let [prev-distances (:distances maze)
         goal (if longest? (:max-coord prev-distances) [end-row end-col])]
     (protocols/report-status ui (str "Plotting path (" (inc (:max prev-distances)) " cells long) …"))
-    ;; Figure out if it's necessary, and if so, figure out how to add the
-    ;; dedupe/only-changed transducer from algs/seq-channel onto the sequence
-    ;; of distances before associng onto the maze.
     (map #(assoc maze :path {:distances %
                              :color-family :red})
          (algs/path-seq maze prev-distances goal))))
