@@ -74,11 +74,9 @@
   (let [steps (cons #(produce-maze maze-params ui)
                     (analysis-steps maze-params ui))]
     (go
-      (loop [[grid & grids] (chain-seqs steps)]
-        (when grid
-          (protocols/report-grid ui grid)
-          (async/<! (sync-chan frame-chan))
-          (recur grids)))
+      (doseq [grid (chain-seqs steps)]
+        (protocols/report-grid ui grid)
+        (async/<! (sync-chan frame-chan)))
       (protocols/report-status ui nil))))
 
 (defn handle-maze-change [{:keys [grid cell-size active] :as maze} canvas frame-chan]
