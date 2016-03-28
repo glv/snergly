@@ -6,7 +6,7 @@
             [snergly.image :as image]
             [snergly.protocols :as protocols]))
 
-(def sync-by-frame false)
+(def sync-by-frame true)
 
 (defn sync-chan [frame-chan]
   (if sync-by-frame
@@ -24,110 +24,78 @@
 ;;
 ;; Name words: progression, intremental, tail-to-head, chain
 
-(defn chain-seqs* [[val & s] fs]
-  (lazy-seq
-    (cons val
-          (cond
-            (not-empty s) (chain-seqs* s fs)
-            (not-empty fs) (chain-seqs* ((first fs) val) (rest fs))
-            :else nil))))
-
 (defn chain-seqs [fs]
-  (chain-seqs* ((first fs)) (rest fs)))
+  (letfn [(chain-seqs* [[val & s] fs]
+            (lazy-seq
+              (cons val
+                    (cond
+                      (not-empty s) (chain-seqs* s fs)
+                      (not-empty fs) (chain-seqs* ((first fs) val) (rest fs))
+                      :else nil))))]
+    (chain-seqs* ((first fs)) (rest fs))))
 
-(defn produce-distances-async [{:keys [start-row start-col anim-chan] :as maze-params} ui grid-key color-family maze]
+(defn produce-distances [{:keys [start-row start-col] :as maze-params} ui grid-key color-family maze]
   (let [prev-distances (:distances maze)
-        [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])
-        analysis-fn #(algs/distances-seq maze [start-row start-col])]
+        [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])]
     (protocols/report-status ui "Finding distances …")
-    (go-loop [maze maze
-              [dist & dists] (analysis-fn)]
-             (if dist
-               (let [maze (assoc maze :distances dist
-                                      grid-key {:distances dist
-                                                :color-family color-family
-                                                :expected-max-distance (* (grid/grid-size maze) 0.8)})]
-                 (protocols/report-grid ui maze)
-                 (async/<! (sync-chan anim-chan))
-                 (recur maze dists))
-               maze))))
+    (map #(assoc maze :distances %
+                      grid-key {:distances %
+                                :color-family color-family
+                                :expected-max-distance (* (grid/grid-size maze) 0.8)})
+         (algs/distances-seq maze [start-row start-col]))))
 
-(defn produce-path-async [{:keys [end-row end-col anim-chan] :as maze-params} ui longest? maze]
+(defn produce-path [{:keys [end-row end-col] :as maze-params} ui longest? maze]
   (let [prev-distances (:distances maze)
-        [end-row end-col] (if longest? (:max-coord prev-distances) [end-row end-col])
-        analysis-fn #(algs/path-seq maze prev-distances [end-row end-col])
-        result-chan (algs/seq-channel analysis-fn)]
+        [end-row end-col] (if longest? (:max-coord prev-distances) [end-row end-col])]
     (protocols/report-status ui (str "Plotting path (" (inc (:max prev-distances)) " cells long) …"))
-    (go-loop [maze maze
-              [dist & dists] (analysis-fn)]
-             (if dist
-               (let [maze (assoc maze :path {:distances dist
-                                             :color-family :red})]
-                 (println "Adding a step to the path")
-                 (protocols/report-grid ui maze)
-                 (async/<! (sync-chan anim-chan))
-                 (recur maze dists))
-               maze))))
+    ;; Figure out if it's necessary, and if so, figure out how to add the
+    ;; dedupe/only-changed transducer from algs/seq-channel onto the sequence
+    ;; of distances before associng onto the maze.
+    (map #(assoc maze :path {:distances %
+                             :color-family :red})
+         (algs/path-seq maze prev-distances [end-row end-col]))))
 
 (defn analysis-steps [{:keys [analysis] :as maze-params} ui]
   (println (str "analysis: " analysis))
   (condp = analysis
     "none" []
-    "distances" [(partial produce-distances-async maze-params ui :dist1 :green)]
-    "path" [(partial produce-distances-async maze-params ui :dist1 :green)
-            (partial produce-path-async maze-params ui false)]
-    "longest path" [(partial produce-distances-async maze-params ui :dist1 :green)
-                    (partial produce-distances-async maze-params ui :dist2 :blue)
-                    (partial produce-path-async maze-params ui true)]))
+    "distances" [(partial produce-distances maze-params ui :dist1 :green)]
+    "path" [(partial produce-distances maze-params ui :dist1 :green)
+            (partial produce-path maze-params ui false)]
+    "longest path" [(partial produce-distances maze-params ui :dist1 :green)
+                    (partial produce-distances maze-params ui :dist2 :blue)
+                    (partial produce-path maze-params ui true)]))
 
-(defn produce-maze-async [{:keys [rows columns algorithm anim-chan] :as maze-params} ui]
+(defn produce-maze [{:keys [rows columns algorithm] :as maze-params} ui]
   (println (str "algorithm: " algorithm))
   (protocols/report-status ui "Carving maze …")
-  (let [grid (grid/make-grid rows columns)
-        algorithm-fn #((algs/algorithm-functions algorithm) grid)]
-    (go
-      (protocols/report-grid ui grid)
-      (async/<! (sync-chan anim-chan))
-      (loop [prev-maze nil
-             [maze & mazes] (sequence (comp (dedupe) (filter grid/changed?)) (algorithm-fn))]
-        (if maze
-          (do
-            (protocols/report-grid ui maze)
-            (async/<! (sync-chan anim-chan))
-            (recur maze mazes))
-          (do
-            (protocols/report-status ui nil)
-            prev-maze))))))
+  (let [initial-grid (grid/make-grid rows columns)
+        algorithm-fn #((algs/algorithm-functions algorithm) initial-grid)]
+    (cons initial-grid (sequence (comp (dedupe) (filter grid/changed?)) (algorithm-fn)))))
 
-(defn run-animation [maze-params ui]
-  (let [steps (cons (fn [_] (produce-maze-async maze-params ui))
+(defn run-animation [maze-params ui frame-chan]
+  (let [steps (cons #(produce-maze maze-params ui)
                     (analysis-steps maze-params ui))]
     (go
-      (loop [grid nil
-             [step & steps] steps]
-        (when step
-          (recur (async/<! (step grid))
-                 steps)))
+      (loop [[grid & grids] (chain-seqs steps)]
+        (when grid
+          (protocols/report-grid ui grid)
+          (async/<! (sync-chan frame-chan))
+          (recur grids)))
       (protocols/report-status ui nil))))
 
-(defn handle-maze-change [{:keys [grid cell-size anim-chan active] :as maze} canvas]
+(defn handle-maze-change [{:keys [grid cell-size active] :as maze} canvas frame-chan]
   (when-not (nil? active)
     (let [g (.getContext canvas "2d")]
       (go
         (image/image-grid g @grid cell-size)
-        (when sync-by-frame (async/>! anim-chan true)))
+        (when sync-by-frame (async/>! (sync-chan frame-chan) true)))
       )))
 
 (defrecord AsyncAnimator [chan] ;; chan currently not used ???
   protocols/Animator
-  (start-animation [this maze-params ui] (run-animation maze-params ui))
-  (animate-frame [this maze-params canvas] (handle-maze-change maze-params canvas)))
+  (start-animation [this maze-params ui] (run-animation maze-params ui (:chan this)))
+  (animate-frame [this maze-params canvas] (handle-maze-change maze-params canvas (:chan this))))
 
-(def animator (->AsyncAnimator (if sync-by-frame
-                                 (async/chan)
-                                 (async/timeout 0))))
-
-(defn animatorf [anim-chan]
-  (->AsyncAnimator (if sync-by-frame
-                     anim-chan
-                     (async/timeout 0))))
+(defn animator [frame-chan]
+  (->AsyncAnimator frame-chan))

@@ -9,7 +9,7 @@
                  [org.clojure/tools.cli "0.3.3"]
                  [org.clojure/core.async "0.2.374"]
                  ;[sablono "0.4.0"]
-                 [org.omcljs/om "1.0.0-alpha24"] ; newest version is 1.0.0-alpha24
+                 [org.omcljs/om "1.0.0-alpha32"] ; newest version is 1.0.0-alpha32
                  [org.clojure/test.check "0.9.0"] ; just to download
                  ;[com.datomic/simulant "0.1.8"] ; just to download
                  [prismatic/schema "1.0.3"]

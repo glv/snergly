@@ -21,7 +21,9 @@
 
 (def ui
   (reify protocols/UI
-    (report-status [_ msg] (set-maze-params! :active msg))
+    (report-status [_ msg]
+      (println (str "STATUS CHANGE: " msg))
+      (set-maze-params! :active msg))
     (report-grid [_ grid] (set-maze-params! :grid (atom grid)))))
 
 ;; I shouldn't have to do this; the "right way", apparently, is to set the
@@ -39,7 +41,7 @@
           :columns   10
           :cell-size 10
           :grid      nil
-          :anim-chan (async/chan)
+          :animator  (snergly.animation/animator (async/chan))
 
           :analysis  "none"
           :start-row 0
@@ -95,12 +97,14 @@
 (defui MazeDisplay
   static om/IQuery
   (query [this]
-    '[{:maze [:grid :rows :columns :cell-size :algorithm :active :anim-chan]}])
+    '[{:maze [:grid :rows :columns :cell-size :algorithm :active :animator]}])
   Object
   (componentDidMount [this]
-    (protocols/animate-frame snergly.animation/animator (om/props this) @thecanvas))
+    (let [params (om/props this)]
+      (protocols/animate-frame (:animator params) params @thecanvas)))
   (componentDidUpdate [this _ _]
-    (protocols/animate-frame snergly.animation/animator (om/props this) @thecanvas))
+    (let [params (om/props this)]
+      (protocols/animate-frame (:animator params) params @thecanvas)))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
@@ -132,7 +136,9 @@
                   active]} maze
           modify (fn [maze-key e]
                    (om/transact! this `[(snergly.core/set-maze {:maze-key ~maze-key :value ~(aget e "target" "value")})]))
-          go-async (fn [maze e] (protocols/start-animation snergly.animation/animator maze ui))
+          go-async (fn [maze e]
+                     (println (str "maze: " maze))
+                     (protocols/start-animation (:animator maze) maze ui))
           ]
       ;; TODO: remember how to disable form elements by group, rather than one-at-a-time.
       ;; TODO: when rows/cols are reduced, adjust analysis params downward if necessary.
