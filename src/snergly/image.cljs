@@ -123,8 +123,6 @@
 (s/defn image-grid [g
                     {:keys [rows columns dist1 dist2 path] :as grid} :- g/Grid
                     cell-size :- g/NonNegativeInt]
-  (when (nil? (:changed-cells grid)) (println "NIL CHANGED CELLS"))
-  (when (g/new? grid) (println "NEW GRID"))
   (let [img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
         background "#fff"
