@@ -49,21 +49,6 @@
 ;; -----------------------------------------------------------------------------
 ;; Parsing
 
-(defmulti coerce-param (fn [p v] p))
-
-(run! #(derive % ::integer)
-      [::rows ::columns ::cell-size ::start-row ::start-col ::end-row ::end-col])
-
-(defmethod coerce-param :default
-  [_ val]
-  val)
-
-(defmethod coerce-param ::integer
-  [_ val]
-  (js/parseInt val))
-
-
-
 (defmulti read om/dispatch)
 
 (defmethod read :default
@@ -79,7 +64,7 @@
 (defmethod mutate 'snergly.core/set-maze-param
   [{:keys [state]} _ {:keys [param value]}]
   {:value {:keys {:maze {:params [param]}}}
-   :action #(swap! state assoc-in [:maze :params param] (coerce-param param value))})
+   :action #(swap! state assoc-in [:maze :params param] value)})
 
 (defmethod mutate 'snergly.core/set-status
   [{:keys [state]} _ {:keys [status]}]
@@ -145,9 +130,15 @@
                   analysis start-row start-col end-row end-col]} params
           {:keys [active grid]} animation
           modify (fn [maze-param e]
-                   ;; Note that the symbol doesn't need to be explicitly namespace-qualified here, but if I used
-                   ;; xact!, it would be.
+                   ;; Note that the symbol doesn't need to be explicitly namespace-qualified here,
+                   ;; but using xact! below, it has to be.
                    (om.next/transact! this `[(set-maze-param {:param ~maze-param :value ~(aget e "target" "value")})]))
+          modify-int (fn [maze-param e]
+                       (let [val (aget e "target" "value")]
+                         (if (re-matches #"^\d+$" val)
+                           (xact! this (snergly.core/set-maze-param
+                                         {:param maze-param
+                                          :value (js/parseInt val)})))))
           go-async (fn [maze e]
                      (protocols/start-animation (get-in maze [:animation :animator]) (:params maze) ui))
           ]
@@ -177,7 +168,7 @@
                                      :min      2
                                      :max      99
                                      :style    #js {:width "30px"}
-                                     :onInput  (partial modify :rows)}))
+                                     :onInput  (partial modify-int :rows)}))
           (dom/label nil
                      "Columns: "
                      (dom/input #js {:type     "number"
@@ -186,7 +177,7 @@
                                      :min      2
                                      :max      99
                                      :style    #js {:width "30px"}
-                                     :onInput  (partial modify :columns)})))
+                                     :onInput  (partial modify-int :columns)})))
         (dom/div
           nil
           (dom/label nil
@@ -206,7 +197,7 @@
                                        :min      0
                                        :max      (dec rows)
                                        :style    #js {:width "30px"}
-                                       :onInput  (partial modify :start-row)}))
+                                       :onInput  (partial modify-int :start-row)}))
             (dom/label nil
                        "Start Column: "
                        (dom/input #js {:type     "number"
@@ -215,7 +206,7 @@
                                        :min      0
                                        :max      (dec columns)
                                        :style    #js {:width "30px"}
-                                       :onInput  (partial modify :start-col)}))))
+                                       :onInput  (partial modify-int :start-col)}))))
         (when (= "path" analysis)
           (dom/div
             nil
@@ -227,7 +218,7 @@
                                        :min      0
                                        :max      (dec rows)
                                        :style    #js {:width "30px"}
-                                       :onInput  (partial modify :end-row)}))
+                                       :onInput  (partial modify-int :end-row)}))
             (dom/label nil
                        "End Column: "
                        (dom/input #js {:type     "number"
@@ -236,7 +227,7 @@
                                        :min      0
                                        :max      (dec columns)
                                        :style    #js {:width "30px"}
-                                       :onInput  (partial modify :end-col)}))))
+                                       :onInput  (partial modify-int :end-col)}))))
         (dom/div
           nil
           (dom/button #js {:id       "gobutton"
