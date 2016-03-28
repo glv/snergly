@@ -253,11 +253,11 @@
 (defn rrun
   "Randomize all of the maze parameters and run."
   []
-  (let [algorithm (rand-nth (:app/algorithms init-data))
-        analysis (rand-nth (:app/analyses init-data))
-        rdimen (+ 5 (rand-int 8)) ; 5..12
-        cdimen (+ 5 (rand-int 8)) ; 5..12
-        ]
+  (let [algorithm        (rand-nth (:app/algorithms init-data))
+        analysis         (rand-nth (:app/analyses init-data))
+        valid-dimensions (range 5 13)
+        rdimen           (rand-nth valid-dimensions)
+        cdimen           (rand-nth valid-dimensions)]
     (xact! reconciler
            (snergly.core/set-maze {:maze-key :algorithm :value algorithm})
            (snergly.core/set-maze {:maze-key :rows :value rdimen})
@@ -303,6 +303,9 @@
 
 
 ;; REPL things:
+;;
+;; Run a random test:
+;; (rrun)
 ;;
 ;; Get to the right namespace:
 ;; (in-ns 'snergly.core)
