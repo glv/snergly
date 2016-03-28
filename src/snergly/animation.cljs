@@ -11,8 +11,6 @@
 (defn sync-chan [frame-chan]
   (if sync-by-frame
     frame-chan
-    ;; this works, but dumps a lot of error messages to the console because
-    ;; it can't accept puts.
     (async/timeout 0)))
 
 (defn chain-update-seqs [fs]
@@ -72,12 +70,17 @@
 
 (defn run-animation [maze-params ui frame-chan]
   (let [steps (cons #(produce-maze maze-params ui)
-                    (analysis-steps maze-params ui))]
+                    (analysis-steps maze-params ui))
+        start-time (system-time)]
     (go
       (doseq [[message grid] (chain-update-seqs steps)]
         (protocols/report-update ui message grid)
         (async/<! (sync-chan frame-chan)))
-      (protocols/report-status ui nil))))
+      (protocols/report-status ui nil)
+      (println (str "Generation and rendering took "
+                    (.toFixed (- (system-time) start-time) 6)
+                    " msecs "
+                    (select-keys maze-params [:rows :columns :algorithm :analysis]))))))
 
 (defn handle-maze-change [grid cell-size canvas frame-chan]
   (let [g (.getContext canvas "2d")]
@@ -86,7 +89,7 @@
       (when sync-by-frame (async/>! (sync-chan frame-chan) true)))
     ))
 
-(defrecord AsyncAnimator [chan] ;; chan currently not used ???
+(defrecord AsyncAnimator [chan]
   protocols/Animator
   (start-animation [this maze-params ui] (run-animation maze-params ui (:chan this)))
   (animate-frame [this grid cell-size canvas] (handle-maze-change grid cell-size canvas (:chan this))))
