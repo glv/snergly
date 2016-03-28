@@ -95,6 +95,24 @@
         (image/image-grid g grid cell-size)
         (protocols/frame-rendered animator)))))
 
+(defn randomize-params [component algorithms analyses]
+  (let [algorithm        (rand-nth algorithms)
+        analysis         (rand-nth analyses)
+        max-dimen        (js/parseInt (aget (gdom/getElement "max-random-dimen") "value"))
+        valid-dimensions (range 5 (inc max-dimen))
+        rdimen           (rand-nth valid-dimensions)
+        cdimen           (rand-nth valid-dimensions)]
+    (xact! component
+           (snergly.core/set-maze-param {:param :algorithm :value algorithm})
+           (snergly.core/set-maze-param {:param :rows      :value rdimen})
+           (snergly.core/set-maze-param {:param :columns   :value cdimen})
+           (snergly.core/set-maze-param {:param :analysis  :value analysis})
+           (snergly.core/set-maze-param {:param :start-row :value (rand-int rdimen)})
+           (snergly.core/set-maze-param {:param :start-col :value (rand-int cdimen)})
+           (snergly.core/set-maze-param {:param :end-row   :value (rand-int rdimen)})
+           (snergly.core/set-maze-param {:param :end-col   :value (rand-int cdimen)})
+           )))
+
 (defui MazeDisplay
   static om/IQuery
   (query [this]
@@ -107,16 +125,25 @@
   (render [this]
     (let [{:keys [animation params]} (om/props this)
           {:keys [rows columns]} params
-          {:keys [active cell-size]} animation]
-      (let [height (inc (* cell-size rows))
-            width (inc (* cell-size columns))]
-        (dom/div nil
-                 (dom/div nil (or active "\u00a0")) ; &nbsp;
-                 (dom/canvas #js {:id     "c1"
-                                  :height height
-                                  :width  width
-                                  :ref "maze-canvas"})
-                 )))))
+          {:keys [active grid cell-size animator]} animation
+          go-async (fn [e]
+                     (protocols/start-animation animator params ui))]
+      (dom/div
+        nil
+        (dom/button #js {:id       "gobutton"
+                         :disabled (or active (not (ready-to-go params)))
+                         :onClick  (partial go-async)}
+                    "Go!")
+        (when grid
+          (let [height (inc (* cell-size rows))
+                width (inc (* cell-size columns))]
+            (dom/div nil
+                     (dom/div nil (or active "\u00a0")) ; &nbsp;
+                     (dom/canvas #js {:id     "c1"
+                                      :height height
+                                      :width  width
+                                      :ref "maze-canvas"})
+                   )))))))
 
 (def maze-display (om/factory MazeDisplay))
 
@@ -130,7 +157,7 @@
           {:keys [params animation]} maze
           {:keys [algorithm rows columns
                   analysis start-row start-col end-row end-col]} params
-          {:keys [active grid]} animation
+          {:keys [active]} animation
           modify (fn [maze-param e]
                    ;; Note that the symbol doesn't need to be explicitly namespace-qualified here,
                    ;; but using xact! below, it has to be.
@@ -141,103 +168,96 @@
                            (xact! this (snergly.core/set-maze-param
                                          {:param maze-param
                                           :value (js/parseInt val)})))))
-          go-async (fn [maze e]
-                     (protocols/start-animation (get-in maze [:animation :animator]) (:params maze) ui))
           ]
       ;; TODO: remember how to disable form elements by group, rather than one-at-a-time.
       ;; TODO: when rows/cols are reduced, adjust analysis params downward if necessary.
       (dom/div
         nil
-        (dom/div
-          nil
-          (dom/label nil
-                     "Algorithm: "
-                     (dom/select #js {:value    algorithm
-                                      :disabled active
-                                      :onChange (partial modify :algorithm)}
-                                 (concat [(dom/option #js {:key ""} "")]
-                                         (map
-                                           (fn [name]
-                                             (dom/option #js {:key name} name))
-                                           algorithms)))))
-        (dom/div
-          nil
-          (dom/label nil
-                     "Rows: "
-                     (dom/input #js {:type     "number"
-                                     :disabled active
-                                     :value    rows
-                                     :min      2
-                                     :max      99
-                                     :style    #js {:width "30px"}
-                                     :onInput  (partial modify-int :rows)}))
-          (dom/label nil
-                     "Columns: "
-                     (dom/input #js {:type     "number"
-                                     :disabled active
-                                     :value    columns
-                                     :min      2
-                                     :max      99
-                                     :style    #js {:width "30px"}
-                                     :onInput  (partial modify-int :columns)})))
-        (dom/div
-          nil
-          (dom/label nil
-                     "Analysis: "
-                     (dom/select #js {:value    analysis
-                                      :disabled active
-                                      :onChange (partial modify :analysis)}
-                                 (map (fn [name] (dom/option #js {:key name} name)) analyses))))
-        (when (contains? #{"distances" "path"} analysis)
+        (dom/fieldset
+          #js {:disabled active}
+          (dom/legend nil "Maze Parameters")
           (dom/div
             nil
             (dom/label nil
-                       "Start Row: "
-                       (dom/input #js {:type     "number"
-                                       :disabled active
-                                       :value    start-row
-                                       :min      0
-                                       :max      (dec rows)
-                                       :style    #js {:width "30px"}
-                                       :onInput  (partial modify-int :start-row)}))
-            (dom/label nil
-                       "Start Column: "
-                       (dom/input #js {:type     "number"
-                                       :disabled active
-                                       :value    start-col
-                                       :min      0
-                                       :max      (dec columns)
-                                       :style    #js {:width "30px"}
-                                       :onInput  (partial modify-int :start-col)}))))
-        (when (= "path" analysis)
+                       "Algorithm: "
+                       (dom/select #js {:value    algorithm
+                                        :onChange (partial modify :algorithm)}
+                                   (concat [(dom/option #js {:key ""} "")]
+                                           (map
+                                             (fn [name]
+                                               (dom/option #js {:key name} name))
+                                             algorithms)))))
           (dom/div
             nil
             (dom/label nil
-                       "End Row: "
+                       "Rows: "
                        (dom/input #js {:type     "number"
-                                       :disabled active
-                                       :value    end-row
-                                       :min      0
-                                       :max      (dec rows)
+                                       :value    rows
+                                       :min      2
+                                       :max      99
                                        :style    #js {:width "30px"}
-                                       :onInput  (partial modify-int :end-row)}))
+                                       :onInput  (partial modify-int :rows)}))
             (dom/label nil
-                       "End Column: "
+                       "Columns: "
                        (dom/input #js {:type     "number"
-                                       :disabled active
-                                       :value    end-col
-                                       :min      0
-                                       :max      (dec columns)
+                                       :value    columns
+                                       :min      2
+                                       :max      99
                                        :style    #js {:width "30px"}
-                                       :onInput  (partial modify-int :end-col)}))))
-        (dom/div
-          nil
-          (dom/button #js {:id       "gobutton"
-                           :disabled (or active (not (ready-to-go params)))
-                           :onClick  (partial go-async maze)}
-                      "Go!"))
-        (when grid (dom/div nil (maze-display maze)))
-        ))))
+                                       :onInput  (partial modify-int :columns)})))
+          (dom/div
+            nil
+            (dom/label nil
+                       "Analysis: "
+                       (dom/select #js {:value    analysis
+                                        :onChange (partial modify :analysis)}
+                                   (map (fn [name] (dom/option #js {:key name} name)) analyses))))
+          (when (contains? #{"distances" "path"} analysis)
+            (dom/div
+              nil
+              (dom/label nil
+                         "Start Row: "
+                         (dom/input #js {:type     "number"
+                                         :value    start-row
+                                         :min      0
+                                         :max      (dec rows)
+                                         :style    #js {:width "30px"}
+                                         :onInput  (partial modify-int :start-row)}))
+              (dom/label nil
+                         "Start Column: "
+                         (dom/input #js {:type     "number"
+                                         :value    start-col
+                                         :min      0
+                                         :max      (dec columns)
+                                         :style    #js {:width "30px"}
+                                         :onInput  (partial modify-int :start-col)}))))
+          (when (= "path" analysis)
+            (dom/div
+              nil
+              (dom/label nil
+                         "End Row: "
+                         (dom/input #js {:type     "number"
+                                         :value    end-row
+                                         :min      0
+                                         :max      (dec rows)
+                                         :style    #js {:width "30px"}
+                                         :onInput  (partial modify-int :end-row)}))
+              (dom/label nil
+                         "End Column: "
+                         (dom/input #js {:type     "number"
+                                         :value    end-col
+                                         :min      0
+                                         :max      (dec columns)
+                                         :style    #js {:width "30px"}
+                                         :onInput  (partial modify-int :end-col)}))))
+          "or: "
+          (dom/button #js {:id       "randbutton"
+                           :onClick  #(randomize-params this algorithms analyses)}
+                      "Choose random parameters")
+
+          )
+        (dom/div nil (maze-display maze)))
+      )))
 
 (def maze-control-panel (om/factory MazeControlPanel))
 
@@ -255,31 +275,20 @@
 ;; -----------------------------------------------------------------------------
 ;; Utilities
 
+(defn rrun
+  "Randomize all of the maze parameters and run."
+  []
+  (let [config (:config reconciler)
+        parser (:parser config)
+        {:keys [app/algorithms app/analyses]} @(:state config)]
+    (randomize-params reconciler algorithms analyses)
+    (js/requestAnimationFrame #(.click (gdom/getElement "gobutton")))
+    (get-in (parser config [:maze]) [:maze :params])))
+
 (defn q [query]
   (let [config (:config reconciler)
         parser (:parser config)]
     (parser config query)))
-
-(defn rrun
-  "Randomize all of the maze parameters and run."
-  []
-  (let [algorithm        (rand-nth (:app/algorithms init-data))
-        analysis         (rand-nth (:app/analyses init-data))
-        valid-dimensions (range 5 13)
-        rdimen           (rand-nth valid-dimensions)
-        cdimen           (rand-nth valid-dimensions)]
-    (xact! reconciler
-           (snergly.core/set-maze-param {:param :algorithm :value algorithm})
-           (snergly.core/set-maze-param {:param :rows      :value rdimen})
-           (snergly.core/set-maze-param {:param :columns   :value cdimen})
-           (snergly.core/set-maze-param {:param :analysis  :value analysis})
-           (snergly.core/set-maze-param {:param :start-row :value (rand-int rdimen)})
-           (snergly.core/set-maze-param {:param :start-col :value (rand-int cdimen)})
-           (snergly.core/set-maze-param {:param :end-row   :value (rand-int rdimen)})
-           (snergly.core/set-maze-param {:param :end-col   :value (rand-int cdimen)})
-           )
-    (js/requestAnimationFrame #(.click (gdom/getElement "gobutton")))
-    (get-in (q [:maze]) [:maze :params])))
 
 (defn t! [update]
   (om.next/transact! reconciler update))
