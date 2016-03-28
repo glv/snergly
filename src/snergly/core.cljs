@@ -7,6 +7,7 @@
             [om.dom :as dom]
             [snergly.algorithms :as algs]
             [snergly.animation :as anim]
+            [snergly.image :as image]
             [snergly.protocols :as protocols]
             ))
 
@@ -29,14 +30,14 @@
    :app/analyses   ["none" "distances" "path" "longest path"]
 
    :maze {:animation {:active   nil
-                      :animator (snergly.animation/animator (async/chan))
+                      :animator (anim/animator (async/chan))
+                      :cell-size 10
                       :grid     nil
                       }
 
           :params {:algorithm ""
                    :rows      10
                    :columns   10
-                   :cell-size 10
                    :analysis  "none"
                    :start-row 0
                    :start-col 0
@@ -87,11 +88,12 @@
        (and (integer? rows) (> rows 1) (< rows 100))
        (and (integer? columns) (> columns 1) (< columns 100))))
 
-(defn animate-if-active [{:keys [animation params]} canvas]
-  (let [{:keys [active grid animator]} animation
-        {:keys [cell-size]} params]
+(defn animate-if-active [{:keys [animation]} canvas]
+  (let [{:keys [active grid animator cell-size]} animation]
     (when active
-      (protocols/animate-frame animator grid cell-size canvas))))
+      (let [g (.getContext canvas "2d")]
+        (image/image-grid g grid cell-size)
+        (protocols/frame-rendered animator)))))
 
 (defui MazeDisplay
   static om/IQuery
@@ -104,8 +106,8 @@
     (animate-if-active (om/props this) (om.next/react-ref this "maze-canvas")))
   (render [this]
     (let [{:keys [animation params]} (om/props this)
-          {:keys [rows columns cell-size]} params
-          {:keys [active]} animation]
+          {:keys [rows columns]} params
+          {:keys [active cell-size]} animation]
       (let [height (inc (* cell-size rows))
             width (inc (* cell-size columns))]
         (dom/div nil

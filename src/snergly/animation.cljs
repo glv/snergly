@@ -3,7 +3,6 @@
   (:require [cljs.core.async :as async]
             [snergly.algorithms :as algs]
             [snergly.grid :as grid]
-            [snergly.image :as image]
             [snergly.protocols :as protocols]))
 
 (def sync-by-frame true)
@@ -82,17 +81,13 @@
                     " msecs "
                     (select-keys maze-params [:rows :columns :algorithm :analysis]))))))
 
-(defn handle-maze-change [grid cell-size canvas frame-chan]
-  (let [g (.getContext canvas "2d")]
-    (go
-      (image/image-grid g grid cell-size)
-      (when sync-by-frame (async/>! (sync-chan frame-chan) true)))
-    ))
+(defn handle-frame-complete [frame-chan]
+  (go (when sync-by-frame (async/>! (sync-chan frame-chan) true))))
 
 (defrecord AsyncAnimator [chan]
   protocols/Animator
   (start-animation [this maze-params ui] (run-animation maze-params ui (:chan this)))
-  (animate-frame [this grid cell-size canvas] (handle-maze-change grid cell-size canvas (:chan this))))
+  (frame-rendered [this] (handle-frame-complete (:chan this))))
 
 (defn animator [frame-chan]
   (->AsyncAnimator frame-chan))

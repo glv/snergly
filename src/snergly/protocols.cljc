@@ -5,7 +5,7 @@
 ;; code tied to that.
 (defprotocol Animator
   (start-animation [_ maze-params ui])
-  (animate-frame [_ grid cell-size canvas]))
+  (frame-rendered [_]))
 
 (defprotocol UI
   (report-status [_ msg])
