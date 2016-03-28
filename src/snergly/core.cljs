@@ -88,11 +88,7 @@
 (defn ready-to-go [{:keys [algorithm rows columns grid] :as maze}]
   (and (not= "" algorithm)
        (and (integer? rows) (> rows 1) (< rows 100))
-       (and (integer? columns) (> columns 1) (< columns 100))
-       (or (nil? grid)
-           (not= algorithm (:algorithm-name grid))
-           (not= rows (:rows grid))
-           (not= columns (:columns grid)))))
+       (and (integer? columns) (> columns 1) (< columns 100))))
 
 (defn animate-if-active [{:keys [active animator grid cell-size]}]
   (when active (protocols/animate-frame animator grid cell-size @thecanvas)))
