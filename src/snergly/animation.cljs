@@ -79,18 +79,17 @@
         (async/<! (sync-chan frame-chan)))
       (protocols/report-status ui nil))))
 
-(defn handle-maze-change [{:keys [grid cell-size active] :as maze} canvas frame-chan]
-  (when-not (nil? active)
-    (let [g (.getContext canvas "2d")]
-      (go
-        (image/image-grid g grid cell-size)
-        (when sync-by-frame (async/>! (sync-chan frame-chan) true)))
-      )))
+(defn handle-maze-change [grid cell-size canvas frame-chan]
+  (let [g (.getContext canvas "2d")]
+    (go
+      (image/image-grid g grid cell-size)
+      (when sync-by-frame (async/>! (sync-chan frame-chan) true)))
+    ))
 
 (defrecord AsyncAnimator [chan] ;; chan currently not used ???
   protocols/Animator
   (start-animation [this maze-params ui] (run-animation maze-params ui (:chan this)))
-  (animate-frame [this maze-params canvas] (handle-maze-change maze-params canvas (:chan this))))
+  (animate-frame [this grid cell-size canvas] (handle-maze-change grid cell-size canvas (:chan this))))
 
 (defn animator [frame-chan]
   (->AsyncAnimator frame-chan))

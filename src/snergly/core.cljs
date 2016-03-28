@@ -94,17 +94,18 @@
            (not= rows (:rows grid))
            (not= columns (:columns grid)))))
 
+(defn animate-if-active [{:keys [active animator grid cell-size]}]
+  (when active (protocols/animate-frame animator grid cell-size @thecanvas)))
+
 (defui MazeDisplay
   static om/IQuery
   (query [this]
     '[{:maze [:grid :rows :columns :cell-size :algorithm :active :animator]}])
   Object
   (componentDidMount [this]
-    (let [params (om/props this)]
-      (protocols/animate-frame (:animator params) params @thecanvas)))
+    (animate-if-active (om/props this)))
   (componentDidUpdate [this _ _]
-    (let [params (om/props this)]
-      (protocols/animate-frame (:animator params) params @thecanvas)))
+    (animate-if-active (om/props this)))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
