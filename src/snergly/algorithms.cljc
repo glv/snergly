@@ -45,13 +45,14 @@
 ;; sidewinder-step).
 
 (defn binary-tree-seq* [grid [coord & coords]]
-  (when coord
-    (let [cell (g/grid-cell grid coord)
-          neighbors (g/cell-neighbors cell [:north :east])
-          next-grid (if (empty? neighbors)
-                      grid
-                      (g/link-cells grid cell (rand-nth neighbors)))]
-      (lazy-seq (cons next-grid (binary-tree-seq* (g/begin-step next-grid) coords))))))
+  (lazy-seq
+    (when coord
+      (let [cell (g/grid-cell grid coord)
+            neighbors (g/cell-neighbors cell [:north :east])
+            next-grid (if (empty? neighbors)
+                        grid
+                        (g/link-cells grid cell (rand-nth neighbors)))]
+        (cons next-grid (binary-tree-seq* (g/begin-step next-grid) coords))))))
 
 (defn binary-tree-seq [grid]
   (binary-tree-seq* (g/begin-step (assoc grid :algorithm-name "binary-tree")) (g/grid-coords grid)))
@@ -79,26 +80,28 @@
     [new-grid (if end-run? [] run)]))
 
 (defn sidewinder-seq* [grid [coord & coords] current-run]
-  (when-not (nil? coord)
-    (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
-      (lazy-seq (cons new-grid (sidewinder-seq* (g/begin-step new-grid) coords (conj processed-run (first coords))))))))
+  (lazy-seq
+    (when-not (nil? coord)
+      (let [[new-grid processed-run] (sidewinder-step grid coord current-run)]
+        (cons new-grid (sidewinder-seq* (g/begin-step new-grid) coords (conj processed-run (first coords))))))))
 
 (defn sidewinder-seq [grid]
   (let [coords (g/grid-coords grid)]
     (sidewinder-seq* (g/begin-step (assoc grid :algorithm-name "sidewinder")) coords [(first coords)])))
 
 (defn aldous-broder-seq* [grid current unvisited]
-  (if (= unvisited 0)
-    (list grid)
-    (let [cell (g/grid-cell grid current)
-          neighbor (rand-nth (g/cell-neighbors cell))
-          neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))
-          new-grid (if neighbor-new?
-                     (g/link-cells grid cell neighbor)
-                     grid)]
-      (lazy-seq (cons new-grid (aldous-broder-seq* (g/begin-step new-grid)
-                                                   neighbor
-                                                   (if neighbor-new? (dec unvisited) unvisited)))))))
+  (lazy-seq
+    (if (= unvisited 0)
+      (cons grid nil)
+      (let [cell (g/grid-cell grid current)
+            neighbor (rand-nth (g/cell-neighbors cell))
+            neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))
+            new-grid (if neighbor-new?
+                       (g/link-cells grid cell neighbor)
+                       grid)]
+        (cons new-grid (aldous-broder-seq* (g/begin-step new-grid)
+                                           neighbor
+                                           (if neighbor-new? (dec unvisited) unvisited)))))))
 
 (defn aldous-broder-seq [grid]
   (aldous-broder-seq* (g/begin-step (assoc grid :algorithm-name "aldous-broder"))
@@ -121,11 +124,13 @@
 (declare wilsons-seq*)
 
 (defn wilsons-carve-passage [grid unvisited [[coord1 coord2] & pairs]]
-  (let [new-grid (g/link-cells grid (g/grid-cell grid coord1) coord2)
-        new-unvisited (remove (partial = coord1) unvisited)]
-    (if (empty? pairs)
-      (lazy-seq (cons new-grid (wilsons-seq* (g/begin-step new-grid) new-unvisited)))
-      (lazy-seq (cons new-grid (wilsons-carve-passage (g/begin-step new-grid) new-unvisited pairs))))))
+  (lazy-seq
+    (let [new-grid (g/link-cells grid (g/grid-cell grid coord1) coord2)
+          new-unvisited (remove (partial = coord1) unvisited)]
+      (cons new-grid
+            (if (empty? pairs)
+              (wilsons-seq* (g/begin-step new-grid) new-unvisited)
+              (wilsons-carve-passage (g/begin-step new-grid) new-unvisited pairs))))))
 
 (defn wilsons-seq* [grid unvisited]
   (if (empty? unvisited)
@@ -159,10 +164,11 @@
          neighbor]))))
 
 (defn hunt-and-kill-seq* [grid current-coord]
-  (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
-    (if-not next-coord
-      (list new-grid)
-      (lazy-seq (cons new-grid (hunt-and-kill-seq* (g/begin-step new-grid) next-coord))))))
+  (lazy-seq
+    (let [[new-grid next-coord] (hunt-and-kill-step grid current-coord)]
+      (cons new-grid
+            (when next-coord
+              (hunt-and-kill-seq* (g/begin-step new-grid) next-coord))))))
 
 (defn hunt-and-kill-seq [grid]
   (hunt-and-kill-seq* (g/begin-step (assoc grid :algorithm-name "hunt-and-kill")) (g/random-coord grid)))
@@ -180,10 +186,11 @@
          (conj stack next-current)]))))
 
 (defn recursive-backtracker-seq* [grid stack]
-  (if (empty? stack)
-    (list grid)
-    (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
-      (lazy-seq (cons new-grid (recursive-backtracker-seq* (g/begin-step new-grid) new-stack))))))
+  (lazy-seq
+    (if (empty? stack)
+      (cons grid nil)
+      (let [[new-grid new-stack] (recursive-backtracker-step grid stack)]
+        (cons new-grid (recursive-backtracker-seq* (g/begin-step new-grid) new-stack))))))
 
 (defn recursive-backtracker-seq [grid]
   (recursive-backtracker-seq* (g/begin-step (assoc grid :algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))
@@ -193,15 +200,16 @@
 ;; algorithm that triggers them every time, which should be helpful for
 ;; debugging.
 (defn pessimal-seq* [grid [[row :as coord] & coords]]
-  (when coord
-    (let [cell (g/grid-cell grid coord)
-          next-grid (cond
-                      (:east cell) (g/link-cells grid cell (:east cell))
-                      (and (odd? row) (:south cell)) (let [first-on-row (g/grid-cell grid [row 0])]
-                                                       (g/link-cells grid first-on-row (:south first-on-row)))
-                      (and (even? row) (:south cell)) (g/link-cells grid cell (:south cell))
-                      :else grid)]
-      (lazy-seq (cons next-grid (pessimal-seq* (g/begin-step next-grid) coords))))))
+  (lazy-seq
+    (when coord
+      (let [cell (g/grid-cell grid coord)
+            next-grid (cond
+                        (:east cell) (g/link-cells grid cell (:east cell))
+                        (and (odd? row) (:south cell)) (let [first-on-row (g/grid-cell grid [row 0])]
+                                                         (g/link-cells grid first-on-row (:south first-on-row)))
+                        (and (even? row) (:south cell)) (g/link-cells grid cell (:south cell))
+                        :else grid)]
+      (cons next-grid (pessimal-seq* (g/begin-step next-grid) coords))))))
 
 (defn pessimal-seq [grid]
   (pessimal-seq* (g/begin-step (assoc grid :algorithm-name "pessimal")) (g/grid-coords grid)))
@@ -233,43 +241,46 @@
                result))))))))
 
 (defn distances-seq* [grid distances current frontier]
-  (let [cell (g/grid-cell grid current)
-        current-distance (distances current)
-        links (remove #(contains? distances %) (:links cell))
-        next-frontier (apply conj frontier links)]
-    (if (empty? next-frontier)
-      (list (assoc distances :max-coord current))
-      (let [new-distances (if (empty? links)
-                            distances
-                            (g/add-distances distances links (inc current-distance)))]
-        (lazy-seq (cons new-distances (distances-seq* grid (g/begin-step new-distances) (peek next-frontier) (pop next-frontier))))))))
+  (lazy-seq
+    (let [cell (g/grid-cell grid current)
+          current-distance (distances current)
+          links (remove #(contains? distances %) (:links cell))
+          next-frontier (apply conj frontier links)]
+      (if (empty? next-frontier)
+        (cons (assoc distances :max-coord current) nil)
+        (let [new-distances (if (empty? links)
+                              distances
+                              (g/add-distances distances links (inc current-distance)))]
+          (cons new-distances (distances-seq* grid (g/begin-step new-distances) (peek next-frontier) (pop next-frontier))))))))
 
 (defn distances-seq [grid start]
-  (let [distances (g/make-distances start)]
-    (sequence (trailing-maxes)
-              (lazy-seq (cons distances (distances-seq* grid
-                                                        (g/begin-step distances)
-                                                        start
-                                                        #?(:clj PersistentQueue/EMPTY
-                                                           :cljs #queue [])))))))
+  (sequence (trailing-maxes)
+            (let [distances (g/make-distances start)]
+              (cons distances (distances-seq* grid
+                                              (g/begin-step distances)
+                                              start
+                                              #?(:clj PersistentQueue/EMPTY
+                                                 :cljs #queue []))))))
 
 (defn path-seq* [grid {:keys [origin] :as distances} current breadcrumbs]
-  (if (= current origin)
-    (list breadcrumbs)
-    (let [current-distance (distances current)
-          neighbor (first (filter #(< (distances %) current-distance)
-                                  (:links (g/grid-cell grid current))))
-          new-breadcrumbs (g/add-distances breadcrumbs [neighbor] (distances neighbor))]
-      (lazy-seq (cons new-breadcrumbs (path-seq* grid distances neighbor (g/begin-step new-breadcrumbs)))))))
+  (lazy-seq
+    (if (= current origin)
+      (cons breadcrumbs nil)
+      (let [current-distance (distances current)
+            neighbor (first (filter #(< (distances %) current-distance)
+                                    (:links (g/grid-cell grid current))))
+            new-breadcrumbs (g/add-distances breadcrumbs [neighbor] (distances neighbor))]
+      (cons new-breadcrumbs (path-seq* grid distances neighbor (g/begin-step new-breadcrumbs)))))))
 
 (defn path-seq [grid distances goal]
-  (let [goal-distance (distances goal)
-        breadcrumbs (assoc (g/add-distances (g/make-distances (:origin distances))
-                                            [goal]
-                                            goal-distance)
-                           :max goal-distance
-                           :max-coord goal)]
-    (lazy-seq (cons breadcrumbs (path-seq* grid distances goal (g/begin-step breadcrumbs))))))
+  (lazy-seq
+    (let [goal-distance (distances goal)
+          breadcrumbs (assoc (g/add-distances (g/make-distances (:origin distances))
+                                              [goal]
+                                              goal-distance)
+                        :max goal-distance
+                        :max-coord goal)]
+      (cons breadcrumbs (path-seq* grid distances goal (g/begin-step breadcrumbs))))))
 
 ;; TODO: it would be easy for a bunch of inefficiency to hide in this
 ;; process, with the sequences including many redundant updates that get

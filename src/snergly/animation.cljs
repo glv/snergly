@@ -29,9 +29,9 @@
             (lazy-seq
               (cons val
                     (cond
-                      (not-empty s) (chain-seqs* s fs)
+                      (not-empty s)  (chain-seqs* s fs)
                       (not-empty fs) (chain-seqs* ((first fs) val) (rest fs))
-                      :else nil))))]
+                      :else          nil))))]
     (chain-seqs* ((first fs)) (rest fs))))
 
 (defn produce-distances [{:keys [start-row start-col] :as maze-params} ui grid-key color-family maze]
