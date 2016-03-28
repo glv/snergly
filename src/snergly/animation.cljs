@@ -34,17 +34,17 @@
                       :else          nil))))]
     (chain-seqs* ((first fs)) (rest fs))))
 
-(defn produce-distances [{:keys [start-row start-col] :as maze-params} ui grid-key color-family maze]
+(defn produce-distances [maze {:keys [start-row start-col] :as maze-params} ui grid-key color-family]
   (let [prev-distances (:distances maze)
-        [start-row start-col] (if prev-distances (:max-coord prev-distances) [start-row start-col])]
+        start (if prev-distances (:max-coord prev-distances) [start-row start-col])]
     (protocols/report-status ui "Finding distances …")
     (map #(assoc maze :distances %
                       grid-key {:distances %
                                 :color-family color-family
                                 :expected-max-distance (* (grid/grid-size maze) 0.8)})
-         (algs/distances-seq maze [start-row start-col]))))
+         (algs/distances-seq maze start))))
 
-(defn produce-path [{:keys [end-row end-col] :as maze-params} ui longest? maze]
+(defn produce-path [maze {:keys [end-row end-col] :as maze-params} ui longest?]
   (let [prev-distances (:distances maze)
         goal (if longest? (:max-coord prev-distances) [end-row end-col])]
     (protocols/report-status ui (str "Plotting path (" (inc (:max prev-distances)) " cells long) …"))
@@ -56,12 +56,12 @@
   (println (str "analysis: " analysis))
   (condp = analysis
     "none" []
-    "distances" [(partial produce-distances maze-params ui :dist1 :green)]
-    "path" [(partial produce-distances maze-params ui :dist1 :green)
-            (partial produce-path maze-params ui false)]
-    "longest path" [(partial produce-distances maze-params ui :dist1 :green)
-                    (partial produce-distances maze-params ui :dist2 :blue)
-                    (partial produce-path maze-params ui true)]))
+    "distances" [#(produce-distances % maze-params ui :dist1 :green)]
+    "path" [#(produce-distances % maze-params ui :dist1 :green)
+            #(produce-path % maze-params ui false)]
+    "longest path" [#(produce-distances % maze-params ui :dist1 :green)
+                    #(produce-distances % maze-params ui :dist2 :blue)
+                    #(produce-path % maze-params ui true)]))
 
 (defn produce-maze [{:keys [rows columns algorithm] :as maze-params} ui]
   (println (str "algorithm: " algorithm))
