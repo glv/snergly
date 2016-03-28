@@ -86,7 +86,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Components
 
-(defn ready-to-go [{:keys [algorithm rows columns grid] :as maze}]
+(defn ready-to-go [{:keys [algorithm rows columns] :as maze}]
   (and (not= "" algorithm)
        (and (integer? rows) (> rows 1) (< rows 100))
        (and (integer? columns) (> columns 1) (< columns 100))))
@@ -104,7 +104,7 @@
   (componentDidUpdate [this _ _]
     (animate-if-active (om/props this)))
   (render [this]
-    (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
+    (let [{:keys [rows columns cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
             width (inc (* cell-size columns))]
         (dom/div nil
