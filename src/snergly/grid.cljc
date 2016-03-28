@@ -172,15 +172,15 @@
    label-specs :- {s/Keyword Distances}]
   (let [specs (seq label-specs)
         changed-cells (apply set/union (map (comp :changed-cells second) specs))
-        get-annotations (fn [cell-coord [label value-map]] (vector label (value-map cell-coord)))
-        assoc-cell (fn [cell cell-coord]
-                     (apply assoc cell (mapcat (partial get-annotations cell-coord) specs)))
-        annotate-cell (fn [grid cell-coord]
-                        (update-in grid
-                                   [:cells (cell-index grid cell-coord)]
-                                   assoc-cell cell-coord))
         cells-to-annotate (if changed-cells changed-cells (grid-coords grid))]
-    (assoc (reduce annotate-cell grid cells-to-annotate) :changed-cells (set cells-to-annotate))))
+    (letfn [(get-annotations [cell-coord [label value-map]] (vector label (value-map cell-coord)))
+            (assoc-cell [cell cell-coord]
+              (apply assoc cell (mapcat (partial get-annotations cell-coord) specs)))
+            (annotate-cell [grid cell-coord]
+              (update-in grid
+                         [:cells (cell-index grid cell-coord)]
+                         assoc-cell cell-coord))]
+      (assoc (reduce annotate-cell grid cells-to-annotate) :changed-cells (set cells-to-annotate)))))
 
 (defn intlabel [val]
   #?(:clj     (format "%2d" val)

@@ -91,18 +91,24 @@
     (is (empty? (:changed-cells reset-distances)))))
 
 (deftest t-new?
-  (doseq [v [(make-grid 2 2)
-             (make-distances [0 0])]]
-    (is (new? v))
-    (is (not (new? (begin-step v))))
-    (is (not (new? (assoc v :changed-cells #{[0 0]}))))))
+  (let [g (make-grid 2 2)]
+    (is (new? g))
+    (is (not (new? (begin-step g))))
+    (is (not (new? (assoc g :changed-cells #{[0 0]})))))
+  (let [d (make-distances [0 0])]
+    (is (not (new? d)))
+    (is (not (new? (begin-step d))))
+    (is (not (new? (assoc d :changed-cells #{[0 0]}))))))
 
 (deftest t-changed?
-  (doseq [v [(make-grid 2 2)
-             (make-distances [0 0])]]
-    (is (not (changed? v)))
-    (is (not (changed? (begin-step v))))
-    (is (changed? (assoc v :changed-cells #{[0 0]})))))
+  (let [g (make-grid 2 2)]
+    (is (not (changed? g)))
+    (is (not (changed? (begin-step g))))
+    (is (changed? (assoc g :changed-cells #{[0 0]}))))
+  (let [d (make-distances [0 0])]
+    (is (changed? d))
+    (is (not (changed? (begin-step d))))
+    (is (changed? (assoc d :changed-cells #{[0 0]})))))
 
 (deftest t-link-cells
   (let [grid3x5 (assoc (make-grid 3 5) :changed-cells #{[0 1] [2 3]})
@@ -122,20 +128,32 @@
 
 (deftest t-grid-annotate-cells
   (let [grid3x2 (make-grid 3 2)
-        labels (assoc (make-distances [1 1])
-                 :max-coord [0 0]
-                 :max 2
-                 [0 0] 2
-                 [0 1] 1
-                 [1 0] 1
-                 [1 1] 0
-                 [2 0] 2
-                 [2 1] 1)
-        annotated (grid-annotate-cells grid3x2 {:distance labels})]
-    (are [pos dist] (= dist (:distance (grid-cell annotated pos)))
-                    [0 0] 2
-                    [0 1] 1
-                    [1 0] 1
+        new (make-distances [1 1])
+        changed (add-distances new [[0 1] [1 0] [2 1]] 1)
+        complete (add-distances changed [[0 0] [2 0]] 2)
+        annotated (grid-annotate-cells grid3x2 {:new-dist new
+                                                :changed-dist changed
+                                                :complete-dist complete})]
+    (are [pos dist] (= dist (:new-dist (grid-cell annotated pos)))
+                    [0 0] nil
+                    [0 1] nil
+                    [1 0] nil
                     [1 1] 0
-                    [2 0] 2
-                    [2 1] 1)))
+                    [2 0] nil
+                    [2 1] nil)
+    (are [pos dist] (= dist (:changed-dist (grid-cell annotated pos)))
+                    [0 0] nil
+                    [0 1] 1 ;nil
+                    [1 0] 1 ;nil
+                    [1 1] 0
+                    [2 0] nil
+                    [2 1] 1) ;nil
+    (are [pos dist] (= dist (:complete-dist (grid-cell annotated pos)))
+                    [0 0] 2 ;nil
+                    [0 1] 1 ;nil
+                    [1 0] 1 ;nil
+                    [1 1] 0
+                    [2 0] 2 ;nil
+                    [2 1] 1) ;nil
+
+    ))
