@@ -143,17 +143,15 @@
                     [2 1] nil)
     (are [pos dist] (= dist (:changed-dist (grid-cell annotated pos)))
                     [0 0] nil
-                    [0 1] 1 ;nil
-                    [1 0] 1 ;nil
+                    [0 1] 1
+                    [1 0] 1
                     [1 1] 0
                     [2 0] nil
-                    [2 1] 1) ;nil
+                    [2 1] 1)
     (are [pos dist] (= dist (:complete-dist (grid-cell annotated pos)))
-                    [0 0] 2 ;nil
-                    [0 1] 1 ;nil
-                    [1 0] 1 ;nil
+                    [0 0] 2
+                    [0 1] 1
+                    [1 0] 1
                     [1 1] 0
-                    [2 0] 2 ;nil
-                    [2 1] 1) ;nil
-
-    ))
+                    [2 0] 2
+                    [2 1] 1)))

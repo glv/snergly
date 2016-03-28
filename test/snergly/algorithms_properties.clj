@@ -216,7 +216,17 @@
 (defspec distances-seq-max-advances-by-1
   10
   (prop/for-all [[maze start-coord] gen-maze-and-coord]
-    (let [intermediates (butlast (all-updates #(distances-seq maze start-coord)))
+    (let [intermediates (all-updates #(distances-seq maze start-coord))
           maxes (map :max intermediates)]
       (every? #(= 1 %)
               (map (fn [[a b]] (- b a)) (partition 2 1 maxes))))))
+
+(defspec path-seq-each-intermediate-changes
+         5
+         (prop/for-all [grid gen-grid]
+                       (let [maze (final-update #((algorithm-functions "binary-tree") grid))
+                             dist1 (last (distances-seq maze [0 0]))
+                             dist2 (last (distances-seq maze (:max-coord dist1)))
+                             intermediates (all-updates #(path-seq maze dist2 (:max-coord dist2)))
+                             change-sets (map :changed-cells intermediates)]
+                         (every? not-empty change-sets))))
