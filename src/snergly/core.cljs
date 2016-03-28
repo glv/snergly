@@ -23,13 +23,6 @@
              (snergly.core/set-status {:status msg})
              (snergly.core/set-grid {:grid grid})))))
 
-;; I shouldn't have to do this; the "right way", apparently, is to set the
-;; ref as a property on the component.  And that works great in figwheel
-;; development mode, but in a production build with optimizations on, it
-;; doesn't work at all.  This is the only way I've been able to get it to
-;; work in both.
-(def thecanvas (atom nil))
-
 (def init-data
   {;; application initialization
    :app/algorithms (sort algs/algorithm-names)
@@ -109,11 +102,11 @@
        (and (integer? rows) (> rows 1) (< rows 100))
        (and (integer? columns) (> columns 1) (< columns 100))))
 
-(defn animate-if-active [{:keys [animation params]}]
+(defn animate-if-active [{:keys [animation params]} canvas]
   (let [{:keys [active grid animator]} animation
         {:keys [cell-size]} params]
     (when active
-      (protocols/animate-frame animator grid cell-size @thecanvas))))
+      (protocols/animate-frame animator grid cell-size canvas))))
 
 (defui MazeDisplay
   static om/IQuery
@@ -121,9 +114,9 @@
     '[:maze])
   Object
   (componentDidMount [this]
-    (animate-if-active (om/props this)))
+    (animate-if-active (om/props this) (om.next/react-ref this "maze-canvas")))
   (componentDidUpdate [this _ _]
-    (animate-if-active (om/props this)))
+    (animate-if-active (om/props this) (om.next/react-ref this "maze-canvas")))
   (render [this]
     (let [{:keys [animation params]} (om/props this)
           {:keys [rows columns cell-size]} params
@@ -135,9 +128,7 @@
                  (dom/canvas #js {:id     "c1"
                                   :height height
                                   :width  width
-                                  :ref    (fn [c]
-                                            (when-not (nil? c)
-                                              (reset! thecanvas c)))})
+                                  :ref "maze-canvas"})
                  )))))
 
 (def maze-display (om/factory MazeDisplay))
