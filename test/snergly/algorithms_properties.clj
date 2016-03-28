@@ -106,7 +106,7 @@
 
 (defn all-updates [algorithm-fn]
   ;; TODO find a single place for the definition of this transducer.
-  (sequence (comp (dedupe) (filter grid/changed?)) (algorithm-fn)))
+  (sequence updates-only (algorithm-fn)))
 
 (defn final-update [algorithm-fn]
   (last (all-updates algorithm-fn)))

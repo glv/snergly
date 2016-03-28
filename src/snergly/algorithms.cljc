@@ -291,9 +291,8 @@
 ;;
 ;; that would count how many elements get filtered.
 
-(defn seq-channel [seq-algorithm]
-  (util/spool (seq-algorithm)
-              (async/chan 1 (comp (dedupe) (filter grid/changed?)))))
+(def updates-only
+  (comp (dedupe) (filter #(or (grid/changed? %) (grid/new? %)))))
 
 ;; I was finding the maze function with (resolve (symbol (str "maze-" name))).
 ;; But apparently ClojureScript namespaces aren't as reflective as Clojure, so

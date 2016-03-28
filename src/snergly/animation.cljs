@@ -15,42 +15,41 @@
     ;; it can't accept puts.
     (async/timeout 0)))
 
-;; I don't know for sure which namespace this should go in, but I know I'm
-;; gonna need it, so I'm exploring the code here.
-;;
-;; (Also, it should really be a macro so that the pieces don't have to be
-;; wrapped in functions, and so that the tail of each sequence can be threaded
-;; in as the first argument of the next producer.)
-;;
-;; Name words: progression, intremental, tail-to-head, chain
-
-(defn chain-seqs [fs]
-  (letfn [(chain-seqs* [[val & s] fs]
+(defn chain-update-seqs [fs]
+  (letfn [(chain-update-seqs* [[[msg val :as update] & s] fs]
             (lazy-seq
-              (cons val
+              (cons update
                     (cond
-                      (not-empty s)  (chain-seqs* s fs)
-                      (not-empty fs) (chain-seqs* ((first fs) val) (rest fs))
+                      (not-empty s)  (chain-update-seqs* s fs)
+                      (not-empty fs) (chain-update-seqs* ((first fs) val) (rest fs))
                       :else          nil))))]
-    (chain-seqs* ((first fs)) (rest fs))))
+    (chain-update-seqs* ((first fs)) (rest fs))))
 
 (defn produce-distances [maze {:keys [start-row start-col] :as maze-params} ui grid-key color-family]
   (let [prev-distances (:distances maze)
-        start (if prev-distances (:max-coord prev-distances) [start-row start-col])]
-    (protocols/report-status ui "Finding distances …")
-    (map #(assoc maze :distances %
-                      grid-key {:distances %
-                                :color-family color-family
-                                :expected-max-distance (* (grid/grid-size maze) 0.8)})
-         (algs/distances-seq maze start))))
+        start (if prev-distances (:max-coord prev-distances) [start-row start-col])
+        expected-max (* (grid/grid-size maze) 0.8)
+        assoc-to-maze (fn [dists]
+                        (assoc maze :distances dists
+                                    grid-key {:distances dists
+                                              :color-family color-family
+                                              :expected-max-distance expected-max}))]
+    (sequence (comp algs/updates-only
+                    (map assoc-to-maze)
+                    (map #(vector "Finding distances …" %)))
+              (algs/distances-seq maze start))))
 
 (defn produce-path [maze {:keys [end-row end-col] :as maze-params} ui longest?]
   (let [prev-distances (:distances maze)
-        goal (if longest? (:max-coord prev-distances) [end-row end-col])]
-    (protocols/report-status ui (str "Plotting path (" (inc (:max prev-distances)) " cells long) …"))
-    (map #(assoc maze :path {:distances %
-                             :color-family :red})
-         (algs/path-seq maze prev-distances goal))))
+        message (str "Plotting path (" (inc (:max prev-distances)) " cells long) …")
+        goal (if longest? (:max-coord prev-distances) [end-row end-col])
+        assoc-to-maze (fn [dists]
+                        (assoc maze :path {:distances dists
+                                           :color-family :red}))]
+    (sequence (comp algs/updates-only
+                    (map assoc-to-maze)
+                    (map #(vector message %)))
+              (algs/path-seq maze prev-distances goal))))
 
 (defn analysis-steps [{:keys [analysis] :as maze-params} ui]
   (println (str "analysis: " analysis))
@@ -65,17 +64,18 @@
 
 (defn produce-maze [{:keys [rows columns algorithm] :as maze-params} ui]
   (println (str "algorithm: " algorithm))
-  (protocols/report-status ui "Carving maze …")
   (let [initial-grid (grid/make-grid rows columns)
         algorithm-fn #((algs/algorithm-functions algorithm) initial-grid)]
-    (cons initial-grid (sequence (comp (dedupe) (filter grid/changed?)) (algorithm-fn)))))
+    (sequence (comp algs/updates-only
+                    (map #(vector "Carving maze …" %)))
+              (cons initial-grid (algorithm-fn)))))
 
 (defn run-animation [maze-params ui frame-chan]
   (let [steps (cons #(produce-maze maze-params ui)
                     (analysis-steps maze-params ui))]
     (go
-      (doseq [grid (chain-seqs steps)]
-        (protocols/report-grid ui grid)
+      (doseq [[message grid] (chain-update-seqs steps)]
+        (protocols/report-update ui message grid)
         (async/<! (sync-chan frame-chan)))
       (protocols/report-status ui nil))))
 

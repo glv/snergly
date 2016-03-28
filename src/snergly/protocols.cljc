@@ -9,4 +9,4 @@
 
 (defprotocol UI
   (report-status [_ msg])
-  (report-grid [_ grid]));; ensure that the grid gets wrapped in an atom
+  (report-update [_ message grid]))
