@@ -1,3 +1,14 @@
 #!/bin/sh
+# I should really first:
+# * check to see if there are things that need to be committed, and bail if so.
+#   * This can be done easily with git status --porcelain; if there are 0 lines
+#     of output, then no commits are required.
+# * check to see if there are commits that need to be pushed, and bail if so.
+#   * This is much harder, but check http://stackoverflow.com/questions/3258243/check-if-pull-needed-in-git#3278427
+#   * Also, this might not be necessary; the SHA once I push is going to be the
+#     same as the HEAD sha for this build, even if not all of the commits have
+#     been pushed.  The issue is: do I want to ever have a deployed demo that
+#     includes code that hasn't been pushed to the remote?
 gitrootdir=`git rev-parse --show-toplevel`
-lein cljsbuild once min && (cd "${gitrootdir}/gh-pages" && cp "${gitrootdir}/resources/public/js/compiled/snergly.js" . && git add snergly.js && git commit -m "Update compiled JS bundle" && git push)
+lastcommitsha=`git log --format="%H" 'HEAD^!'`
+lein cljsbuild once min && (cd "${gitrootdir}/gh-pages" && cp "${gitrootdir}/resources/public/js/compiled/snergly.js" . && git add snergly.js && git commit -m "Build ${lastcommitsha}" && git push)
