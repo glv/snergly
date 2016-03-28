@@ -6,6 +6,7 @@
             [om.dom :as dom]
             [snergly.algorithms :as algs]
             [snergly.animation :as anim]
+            [snergly.protocols :as protocols]
             ))
 
 (enable-console-print!)
@@ -17,6 +18,11 @@
   (om/transact! reconciler
                 (mapv (fn [[k v]] `(snergly.core/set-maze {:maze-key ~k :value ~v}))
                       (partition 2 kvpairs))))
+
+(def ui
+  (reify protocols/UI
+    (report-status [_ msg] (set-maze-params! :active msg))
+    (report-grid [_ grid] (set-maze-params! :grid (atom grid)))))
 
 ;; I shouldn't have to do this; the "right way", apparently, is to set the
 ;; ref as a property on the component.  And that works great in figwheel
@@ -92,9 +98,9 @@
     '[{:maze [:grid :rows :columns :cell-size :algorithm :active :anim-chan]}])
   Object
   (componentDidMount [this]
-    (anim/handle-maze-change (om/props this) @thecanvas))
+    (protocols/animate-frame snergly.animation/animator (om/props this) @thecanvas))
   (componentDidUpdate [this _ _]
-    (anim/handle-maze-change (om/props this) @thecanvas))
+    (protocols/animate-frame snergly.animation/animator (om/props this) @thecanvas))
   (render [this]
     (let [{:keys [grid rows columns algorithm cell-size active] :as maze} (om/props this)]
       (let [height (inc (* cell-size rows))
@@ -126,7 +132,8 @@
                   active]} maze
           modify (fn [maze-key e]
                    (om/transact! this `[(snergly.core/set-maze {:maze-key ~maze-key :value ~(aget e "target" "value")})]))
-          go-async (fn [maze e] (anim/run-animation maze set-maze-params!))]
+          go-async (fn [maze e] (protocols/start-animation snergly.animation/animator maze ui))
+          ]
       ;; TODO: remember how to disable form elements by group, rather than one-at-a-time.
       ;; TODO: when rows/cols are reduced, adjust analysis params downward if necessary.
       (dom/div

@@ -88,7 +88,7 @@
                    cell-size :- g/NonNegativeInt
                    path-map :- PathMap
                    changed-cells]
-  (println (str "Would draw path for " (count changed-cells) " cells."))
+  ;(println (str "Would draw path for " (count changed-cells) " cells."))
   (let [path-distances (:distances path-map)
         color (util/make-color 1 1 (:color-family path-map))
         inverted-path-map (set/map-invert (dissoc path-distances :max))

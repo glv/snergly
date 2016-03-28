@@ -18,14 +18,14 @@
 
 (def Cell
   "Schema for maze cells"
-  {:type (s/eq :Cell)
-   :coord CellPosition
-   :north (s/maybe CellPosition)
-   :south (s/maybe CellPosition)
-   :east (s/maybe CellPosition)
-   :west (s/maybe CellPosition)
-   :links #{CellPosition}
-   s/Keyword s/Any ; for annotations: distances, colors, labels, etc.
+  {:type     (s/eq :Cell)
+   :coord    CellPosition
+   :north    (s/maybe CellPosition)
+   :south    (s/maybe CellPosition)
+   :east     (s/maybe CellPosition)
+   :west     (s/maybe CellPosition)
+   :links    #{CellPosition}
+   s/Keyword s/Any                                          ; for annotations: distances, colors, labels, etc.
    })
 
 (s/defschema TracksChanges
@@ -33,17 +33,19 @@
     :type
     {:changed-cells (s/maybe #{CellPosition})}))
 
-(abstract-map/extend-schema Grid TracksChanges [:Grid]
-  {:algorithm-name s/Str ; algorithms should set this to indicate how the grid was generated
-   :rows GridDimen
-   :columns GridDimen
-   :cells [Cell]})
+(abstract-map/extend-schema
+  Grid TracksChanges [:Grid]
+  {:algorithm-name s/Str          ; algorithms should set this to indicate how the grid was generated
+   :rows           GridDimen
+   :columns        GridDimen
+   :cells          [Cell]})
 
-(abstract-map/extend-schema Distances TracksChanges [:Distances]
-  {:origin CellPosition ; the cell distances are relative to
+(abstract-map/extend-schema
+  Distances TracksChanges [:Distances]
+  {:origin                     CellPosition ; the cell distances are relative to
    (s/optional-key :max-coord) CellPosition ; the farthest cell from :origin
-   :max NonNegativeInt ; the distance of :max-coord from :origin
-   CellPosition NonNegativeInt ; the distance from :origin to CellPosition
+   :max                        NonNegativeInt ; the distance of :max-coord from :origin
+   CellPosition                NonNegativeInt ; the distance from :origin to CellPosition
    })
 
 (s/defn make-cell :- Cell
@@ -60,7 +62,7 @@
   ([cell :- Cell] (cell-neighbors cell [:north :south :east :west]))
   ([cell :- Cell
     directions :- [(s/enum :north :south :east :west)]]
-   (filter identity (map cell directions))))
+    (filter identity (map cell directions))))
 
 (s/defn make-grid :- Grid
   "Creates and returns a new grid with the specified row and column sizes."
@@ -143,10 +145,10 @@
 (s/defn make-distances :- Distances
   "Creates and returns a new distances object with the supplied origin."
   [origin :- CellPosition]
-  {:type   :Distances
-   :origin origin
-   :max 0
-   origin 0
+  {:type          :Distances
+   :origin        origin
+   :max           0
+   origin         0
    :changed-cells #{origin}})
 
 (s/defn add-distances :- Distances
