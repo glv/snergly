@@ -1,5 +1,6 @@
 (ns snergly.core
-  (:require-macros [cljs.core.async.macros :refer [go go-loop]])
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]]
+                   [snergly.util :refer [xact!]])
   (:require [cljs.core.async :as async]
             [goog.dom :as gdom]
             [om.next :as om :refer-macros [defui]]
@@ -226,7 +227,8 @@
                                        :onInput (partial modify :end-col)}))))
         (dom/div
           nil
-          (dom/button #js {:disabled (or active (not (ready-to-go maze)))
+          (dom/button #js {:id "gobutton"
+                           :disabled (or active (not (ready-to-go maze)))
                            :onClick (partial go-async maze)}
                       "Go!"))
         (when grid (dom/div nil (maze-display maze)))
@@ -247,6 +249,26 @@
 
 ;; -----------------------------------------------------------------------------
 ;; Utilities
+
+(defn rrun
+  "Randomize all of the maze parameters and run."
+  []
+  (let [algorithm (rand-nth (:app/algorithms init-data))
+        analysis (rand-nth (:app/analyses init-data))
+        rdimen (+ 5 (rand-int 8)) ; 5..12
+        cdimen (+ 5 (rand-int 8)) ; 5..12
+        ]
+    (xact! reconciler
+           (snergly.core/set-maze {:maze-key :algorithm :value algorithm})
+           (snergly.core/set-maze {:maze-key :rows :value rdimen})
+           (snergly.core/set-maze {:maze-key :columns :value cdimen})
+           (snergly.core/set-maze {:maze-key :analysis :value analysis})
+           (snergly.core/set-maze {:maze-key :start-row :value (rand-int rdimen)})
+           (snergly.core/set-maze {:maze-key :start-col :value (rand-int cdimen)})
+           (snergly.core/set-maze {:maze-key :end-row :value (rand-int rdimen)})
+           (snergly.core/set-maze {:maze-key :end-col :value (rand-int cdimen)})
+           ))
+  (js/requestAnimationFrame #(.click (gdom/getElement "gobutton"))))
 
 (defn q [query]
   (let [config (:config reconciler)

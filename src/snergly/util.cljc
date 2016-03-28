@@ -37,3 +37,11 @@
 (defn base36 [num]
   #?(:clj (java.lang.Integer/toString num 36)
      :cljs (.toString num 36)))
+
+#?(:clj
+   (defmacro xact! [reconciler-or-component & forms]
+     `(om.next/transact! ~reconciler-or-component
+                         (apply vector [~@(map (fn [form#]
+                                                 `(apply list [(quote ~(first form#)) ~@(rest form#)]))
+                                               forms)])))
+   )
