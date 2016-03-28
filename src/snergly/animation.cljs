@@ -83,7 +83,7 @@
   (when-not (nil? active)
     (let [g (.getContext canvas "2d")]
       (go
-        (image/image-grid g @grid cell-size)
+        (image/image-grid g grid cell-size)
         (when sync-by-frame (async/>! (sync-chan frame-chan) true)))
       )))
 

@@ -24,7 +24,7 @@
     (report-status [_ msg]
       (println (str "STATUS CHANGE: " msg))
       (set-maze-params! :active msg))
-    (report-grid [_ grid] (set-maze-params! :grid (atom grid)))))
+    (report-grid [_ grid] (set-maze-params! :grid grid))))
 
 ;; I shouldn't have to do this; the "right way", apparently, is to set the
 ;; ref as a property on the component.  And that works great in figwheel
