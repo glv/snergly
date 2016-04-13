@@ -60,7 +60,11 @@
           y (if (g/linked? cell (:north cell)) (- y 0.5) y)
           w (if (g/linked? cell (:east cell)) (+ cell-size 0.5) cell-size)
           h (if (g/linked? cell (:south cell)) (+ cell-size 0.5) cell-size)
-          max-distance (if (:max-coord distances) (:max distances) expected-max-distance)
+          ;; Ignore max-distance until optimized rendering is completely working.
+          ;; Right now, this causes a distracting sudden darkening of the colors
+          ;; at the end of each distances pass.
+          ;; max-distance (if (:max-coord distances) (:max distances) expected-max-distance)
+          max-distance (:max distances)
           color (if distance-map
                   (util/make-color max-distance (distances coord) color-family)
                   background)]
