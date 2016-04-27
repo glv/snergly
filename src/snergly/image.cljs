@@ -10,6 +10,37 @@
 
 (def optimize-drawing false)
 
+;; I think this animation-state stuff should really be in image as render-state
+;; or something like that, because it will be useful in the plain Clojure
+;; version as well.  But at the moment, this namespace doesn't have a dependency
+;; on image, so I want to think about it before I do that.
+(def ColorFamily
+  (apply s/enum (keys util/color-families)))
+
+(def RenderState
+  "Schema for animation frame state"
+  {:type              (s/eq :RenderState)
+   :status            (s/maybe s/Str)
+   :grid              (s/maybe g/Grid)
+   :dist-1            (s/maybe g/Distances)
+   :color-family-1    ColorFamily
+   :dist-2            (s/maybe g/Distances)
+   :color-family-2    ColorFamily
+   :path              (s/maybe g/Distances)
+   :color-family-path ColorFamily
+   })
+
+(def render-state {:type :RenderState
+                   :status nil
+                   :grid nil
+                   :dist-1 nil
+                   :color-family-1 :green
+                   :dist-2 nil
+                   :color-family-2 :blue
+                   :path nil
+                   :color-family-path :red
+                   })
+
 ;; To debug the optimized drawing:
 ;; * set snergly.image/optimize-drawing to true
 ;; * set snergly.core/sync-by-frame to false
@@ -125,12 +156,23 @@
   ))
 
 (s/defn image-grid [g
-                    {:keys [rows columns dist1 dist2 path] :as grid} :- g/Grid
+                    {:keys [grid
+                            dist-1 color-family-1
+                            dist-2 color-family-2
+                            path color-family-path]} :- RenderState
                     cell-size :- g/NonNegativeInt]
-  (let [img-width (inc (* cell-size columns))
+  (let [{:keys [rows columns]} grid
+        img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
         background "#fff"
         wall "#000"
+        ;; The need for these DistanceMap values is a holdover, but for now I'm
+        ;; going to leave them here to contain the ripple effects from changing
+        ;; to the RenderState objects.
+        dist-specs (remove #(nil? (:distances %))
+                           [{:distances dist-2 :color-family color-family-2 :expected-max-distance (g/grid-size g)}
+                            {:distances dist-1 :color-family color-family-1 :expected-max-distance (g/grid-size g)}])
+        path-spec (when path {:distances path :color-family color-family-path})
         ;; if we aren't optimizing drawing, discard optimization information
         ;grid (if *optimize-drawing* grid (assoc grid :changed-cells nil))
         ]
@@ -138,6 +180,6 @@
     (aset g "fillStyle" background)
     (aset g "lineWidth" strokewidth)
     (when (g/new? grid) (fill-rect g background 0 0 img-width img-height))
-    (draw-cells g grid cell-size background wall (remove nil? [dist2 dist1]) path)
+    (draw-cells g grid cell-size background wall dist-specs path-spec)
     )
   )

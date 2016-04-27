@@ -3,6 +3,8 @@
            [java.awt.image BufferedImage])
   (:require [snergly.grid :refer :all]))
 
+;; TODO: update this to work like the cljs version and use a RenderState
+;; object and not require annotating the cells.
 (defn draw-cells [^Graphics2D g grid cell-size draw-fn]
   (doseq [coord (grid-coords grid)]
     (let [[y1 x1] (map #(* % cell-size) coord)

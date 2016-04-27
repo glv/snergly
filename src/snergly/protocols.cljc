@@ -9,4 +9,4 @@
 
 (defprotocol UI
   (report-status [_ msg])
-  (report-update [_ message grid]))
+  (report-update [_ r-state]))

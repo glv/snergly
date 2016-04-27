@@ -19,20 +19,20 @@
   (reify protocols/UI
     (report-status [_ msg]
       (xact! reconciler (snergly.core/set-status {:status msg})))
-    (report-update [_ msg grid]
+    (report-update [_ r-state]
       (xact! reconciler
-             (snergly.core/set-status {:status msg})
-             (snergly.core/set-grid {:grid grid})))))
+             (snergly.core/set-status {:status (:status r-state)})
+             (snergly.core/set-render-state {:render-state r-state})))))
 
 (def init-data
   {;; application initialization
    :app/algorithms (sort algs/algorithm-names)
    :app/analyses   ["none" "distances" "path" "longest path"]
 
-   :maze {:animation {:active   nil
-                      :animator (anim/animator (async/chan))
-                      :cell-size 10
-                      :grid     nil
+   :maze {:animation {:active       nil
+                      :animator     (anim/animator (async/chan))
+                      :cell-size    10
+                      :render-state nil
                       }
 
           :params {:algorithm ""
@@ -75,10 +75,10 @@
       {:value {:keys {:maze {:params [:active]}}}
        :action #(swap! state assoc-in [:maze :animation :active] status)})))
 
-(defmethod mutate 'snergly.core/set-grid
-  [{:keys [state]} _ {:keys [grid]}]
-  {:value {:keys {:maze {:params [:grid]}}}
-   :action #(swap! state assoc-in [:maze :animation :grid] grid)})
+(defmethod mutate 'snergly.core/set-render-state
+  [{:keys [state]} _ {:keys [render-state]}]
+  {:value {:keys {:maze {:params [:render-state]}}}
+   :action #(swap! state assoc-in [:maze :animation :render-state] render-state)})
 
 ;; -----------------------------------------------------------------------------
 ;; Components
@@ -89,10 +89,10 @@
        (and (integer? columns) (> columns 1) (< columns 100))))
 
 (defn animate-if-active [{:keys [animation]} canvas]
-  (let [{:keys [active grid animator cell-size]} animation]
+  (let [{:keys [active render-state animator cell-size]} animation]
     (when active
       (let [g (.getContext canvas "2d")]
-        (image/image-grid g grid cell-size)
+        (image/image-grid g render-state cell-size)
         (protocols/frame-rendered animator)))))
 
 (defn randomize-params [component algorithms analyses]
@@ -125,7 +125,7 @@
   (render [this]
     (let [{:keys [animation params]} (om/props this)
           {:keys [rows columns]} params
-          {:keys [active grid cell-size animator]} animation
+          {:keys [active render-state cell-size animator]} animation
           go-async (fn [e]
                      (protocols/start-animation animator params ui))]
       (dom/div
@@ -134,7 +134,7 @@
                          :disabled (or active (not (ready-to-go params)))
                          :onClick  (partial go-async)}
                     "Go!")
-        (when grid
+        (when render-state
           (let [height (inc (* cell-size rows))
                 width (inc (* cell-size columns))]
             (dom/div nil
