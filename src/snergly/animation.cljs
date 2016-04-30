@@ -49,13 +49,13 @@
 (defn analysis-steps [{:keys [analysis] :as maze-params} ui]
   (println (str "analysis: " analysis))
   (condp = analysis
-    "none" []
-    "distances" [#(produce-distances % maze-params ui :dist-1 nil)]
-    "path" [#(produce-distances % maze-params ui :dist-1 nil)
-            #(produce-path % maze-params ui :dist-1 false)]
-    "longest path" [#(produce-distances % maze-params ui :dist-1 nil)
+    "none"         []
+    "distances"    [#(produce-distances % maze-params ui :dist-1 nil    )]
+    "path"         [#(produce-distances % maze-params ui :dist-1 nil    )
+                    #(produce-path      % maze-params ui :dist-1 false  )]
+    "longest path" [#(produce-distances % maze-params ui :dist-1 nil    )
                     #(produce-distances % maze-params ui :dist-2 :dist-1)
-                    #(produce-path % maze-params ui :dist-2 true)]))
+                    #(produce-path      % maze-params ui :dist-2 true   )]))
 
 (defn produce-maze [{:keys [rows columns algorithm] :as maze-params} ui]
   (println (str "algorithm: " algorithm))
