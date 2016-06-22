@@ -25,8 +25,8 @@
   (when-not (linked? cell (:east cell)) (.drawLine g x2 y1 x2 y2))
   (when-not (linked? cell (:south cell)) (.drawLine g x1 y2 x2 y2)))
 
-(defn image-grid [{:keys [rows columns] :as grid} cell-size]
-  (let [img-width (inc (* cell-size columns))
+(defn image-grid [{:keys [rows cols] :as grid} cell-size]
+  (let [img-width (inc (* cell-size cols))
         img-height (inc (* cell-size rows))
         background Color/white
         wall Color/black

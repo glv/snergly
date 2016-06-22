@@ -56,10 +56,10 @@
    ["-s" "--size DIMENS" "Grid size (e.g. 5 or 8x5)"
     :default [5 5]
     :parse-fn parse-grid-size
-    :validate [(fn [[rows columns]]
+    :validate [(fn [[rows cols]]
                  (let [in-range #(< 1 % 10000)]
                    (and (in-range rows)
-                        (in-range columns)))) "Grid dimensions must be numbers between 1 and 10,000"]]])
+                        (in-range cols)))) "Grid dimensions must be numbers between 1 and 10,000"]]])
 
 (defn run-and-render [algorithm grid-size render-fn]
   (render-fn (algorithm (apply grid/make-grid grid-size))))

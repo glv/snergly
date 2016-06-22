@@ -56,9 +56,9 @@
                     #(produce-distances % maze-params ui ::i/dist-2 ::i/dist-1)
                     #(produce-path      % maze-params ui ::i/dist-2 true      )]))
 
-(defn produce-maze [{:keys [rows columns algorithm] :as maze-params} ui]
+(defn produce-maze [{:keys [rows cols algorithm] :as maze-params} ui]
   (println (str "algorithm: " algorithm))
-  (let [initial-grid (grid/make-grid rows columns)
+  (let [initial-grid (grid/make-grid rows cols)
         initial-state (assoc i/render-state ::i/status "Carving maze …")
         algorithm-fn #((algs/algorithm-functions algorithm) initial-grid)]
     (sequence (comp algs/updates-only
@@ -77,7 +77,7 @@
       (println (str "Generation and rendering took "
                     (.toFixed (- (system-time) start-time) 6)
                     " msecs "
-                    (select-keys maze-params [:rows :columns :algorithm :analysis]))))))
+                    (select-keys maze-params [:rows :cols :algorithm :analysis]))))))
 
 (defn handle-frame-complete [frame-chan]
   (go (when sync-by-frame (async/>! (sync-chan frame-chan) true))))

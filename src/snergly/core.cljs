@@ -37,7 +37,7 @@
 
           :params {:algorithm ""
                    :rows      10
-                   :columns   10
+                   :cols   10
                    :analysis  "none"
                    :start-row 0
                    :start-col 0
@@ -83,10 +83,10 @@
 ;; -----------------------------------------------------------------------------
 ;; Components
 
-(defn ready-to-go [{:keys [algorithm rows columns]}]
+(defn ready-to-go [{:keys [algorithm rows cols]}]
   (and (not= "" algorithm)
        (and (integer? rows) (> rows 1) (< rows 100))
-       (and (integer? columns) (> columns 1) (< columns 100))))
+       (and (integer? cols) (> cols 1) (< cols 100))))
 
 (defn animate-if-active [{:keys [animation]} canvas]
   (let [{:keys [active render-state animator cell-size]} animation]
@@ -105,7 +105,7 @@
     (xact! component
            (snergly.core/set-maze-param {:param :algorithm :value algorithm})
            (snergly.core/set-maze-param {:param :rows      :value rdimen})
-           (snergly.core/set-maze-param {:param :columns   :value cdimen})
+           (snergly.core/set-maze-param {:param :cols   :value cdimen})
            (snergly.core/set-maze-param {:param :analysis  :value analysis})
            (snergly.core/set-maze-param {:param :start-row :value (rand-int rdimen)})
            (snergly.core/set-maze-param {:param :start-col :value (rand-int cdimen)})
@@ -124,7 +124,7 @@
     (animate-if-active (om/props this) (om.next/react-ref this "maze-canvas")))
   (render [this]
     (let [{:keys [animation params]} (om/props this)
-          {:keys [rows columns]} params
+          {:keys [rows cols]} params
           {:keys [active render-state cell-size animator]} animation
           go-async (fn [e]
                      (protocols/start-animation animator params ui))]
@@ -136,7 +136,7 @@
                     "Go!")
         (when render-state
           (let [height (inc (* cell-size rows))
-                width (inc (* cell-size columns))]
+                width (inc (* cell-size cols))]
             (dom/div nil
                      (dom/div nil (or active "\u00a0")) ; &nbsp;
                      (dom/canvas #js {:id     "c1"
@@ -155,7 +155,7 @@
   (render [this]
     (let [{:keys [app/algorithms app/analyses maze]} (om/props this)
           {:keys [params animation]} maze
-          {:keys [algorithm rows columns
+          {:keys [algorithm rows cols
                   analysis start-row start-col end-row end-col]} params
           {:keys [active]} animation
           modify (fn [maze-param e]
@@ -200,11 +200,11 @@
             (dom/label nil
                        "Columns: "
                        (dom/input #js {:type     "number"
-                                       :value    columns
+                                       :value    cols
                                        :min      2
                                        :max      99
                                        :style    #js {:width "30px"}
-                                       :onInput  (partial modify-int :columns)})))
+                                       :onInput  (partial modify-int :cols)})))
           (dom/div
             nil
             (dom/label nil
@@ -228,7 +228,7 @@
                          (dom/input #js {:type     "number"
                                          :value    start-col
                                          :min      0
-                                         :max      (dec columns)
+                                         :max      (dec cols)
                                          :style    #js {:width "30px"}
                                          :onInput  (partial modify-int :start-col)}))))
           (when (= "path" analysis)
@@ -247,7 +247,7 @@
                          (dom/input #js {:type     "number"
                                          :value    end-col
                                          :min      0
-                                         :max      (dec columns)
+                                         :max      (dec cols)
                                          :style    #js {:width "30px"}
                                          :onInput  (partial modify-int :end-col)}))))
           "or: "

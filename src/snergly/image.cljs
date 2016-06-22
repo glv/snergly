@@ -186,9 +186,9 @@
                           ::dist-2 ::color-family-2
                           ::path ::color-family-path] :as render-state}
                   cell-size]
-  (let [{rows ::g/rows columns ::g/cols} grid
+  (let [{rows ::g/rows cols ::g/cols} grid
         _ (println (str "rows: " rows))
-        img-width (inc (* cell-size columns))
+        img-width (inc (* cell-size cols))
         img-height (inc (* cell-size rows))
         background "#fff"
         wall "#000"
