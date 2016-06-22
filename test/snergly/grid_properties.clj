@@ -6,7 +6,7 @@
             [clojure.test.check.clojure-test :refer :all]
             [clojure.spec :as s]
             [clojure.spec.test :as st]
-            [snergly.grid :refer :all]))
+            [snergly.grid :as g]))
 
 (s/instrument-ns 'snergly.grid)
 
@@ -30,33 +30,33 @@
   40
   (prop/for-all [[rows row] gen-dimen-and-coord
                  [cols col] gen-dimen-and-coord]
-    (let [cell (make-cell row col rows cols)]
-      (valid-coord? rows cols (:snergly.grid/coord cell)))))
+    (let [cell (g/make-cell row col rows cols)]
+      (valid-coord? rows cols (::g/coord cell)))))
 
 (defspec cell-knows-about-neighbors
   50
   (prop/for-all [[rows row] gen-dimen-and-coord
                  [cols col] gen-dimen-and-coord]
-    (let [cell (make-cell row col rows cols)]
+    (let [cell (g/make-cell row col rows cols)]
       (and (if (> row 0)
-             (= (:snergly.grid/north cell) [(dec row) col])
-             (nil? (:snergly.grid/north cell)))
+             (= (::g/north cell) [(dec row) col])
+             (nil? (::g/north cell)))
            (if (< row (dec rows))
-             (= (:snergly.grid/south cell) [(inc row) col])
-             (nil? (:snergly.grid/south cell)))
+             (= (::g/south cell) [(inc row) col])
+             (nil? (::g/south cell)))
            (if (> col 0)
-             (= (:snergly.grid/west cell) [row (dec col)])
-             (nil? (:snergly.grid/west cell)))
+             (= (::g/west cell) [row (dec col)])
+             (nil? (::g/west cell)))
            (if (< col (dec cols))
-             (= (:snergly.grid/east cell) [row (inc col)])
-             (nil? (:snergly.grid/east cell)))))))
+             (= (::g/east cell) [row (inc col)])
+             (nil? (::g/east cell)))))))
 
 (defspec cell-neighbors-returns-all-neighbors
   100
   (prop/for-all [[rows row] gen-dimen-and-coord
                  [cols col] gen-dimen-and-coord]
-    (let [cell (make-cell row col rows cols)
-          neighbors (into #{} (cell-neighbors cell))
+    (let [cell (g/make-cell row col rows cols)
+          neighbors (into #{} (g/cell-neighbors cell))
           neighbor-test (fn [tf r c]
                           (= tf (contains? neighbors [r c])))
           is-neighbor (fn [r c]
@@ -71,31 +71,31 @@
   30
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
-    (let [grid (make-grid rows cols)]
-      (and (= rows (:snergly.grid/rows grid))
-           (= cols (:snergly.grid/cols grid))
-           (= (* rows cols) (count (:snergly.grid/cells grid)))))))
+    (let [grid (g/make-grid rows cols)]
+      (and (= rows (::g/rows grid))
+           (= cols (::g/cols grid))
+           (= (* rows cols) (count (::g/cells grid)))))))
 
 (defspec random-coords-are-within-grid
   100
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
-    (let [grid (make-grid rows cols)
-          [row col] (random-coord grid)]
+    (let [grid (g/make-grid rows cols)
+          [row col] (g/random-coord grid)]
       (valid-coord? rows cols row col))))
 
 (defspec grid-row-coords-for-each-cell
   10
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
-    (let [grid (make-grid rows cols)]
-      (= (grid-size grid)
-         (count (apply concat (grid-row-coords grid)))))))
+    (let [grid (g/make-grid rows cols)]
+      (= (g/grid-size grid)
+         (count (apply concat (g/grid-row-coords grid)))))))
 
 (defspec grid-coords-for-each-cell
   10
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
-    (let [grid (make-grid rows cols)]
-      (= (grid-size grid)
-         (count (grid-coords grid))))))
+    (let [grid (g/make-grid rows cols)]
+      (= (g/grid-size grid)
+         (count (g/grid-coords grid))))))
