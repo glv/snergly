@@ -1,7 +1,7 @@
 (ns snergly.image
-  (:require [snergly.grid :as g]
+  (:require [cljs.spec :as s]
+            [snergly.grid :as g]
             [snergly.util :as util]
-            [schema.core :as s :include-macros true]
             [clojure.set :as set]))
 
 ;; File conventions:
@@ -10,35 +10,49 @@
 
 (def optimize-drawing false)
 
+(s/def ::type           symbol?) ; make this better
+(s/def ::color-family (set (keys util/color-families)))
+(s/def ::status (s/nilable string?))
+(s/def ::grid (s/nilable ::g/grid))
+(s/def ::dist-1 (s/nilable ::g/distances))
+(s/def ::dist-2 (s/nilable ::g/distances))
+(s/def ::path (s/nilable ::g/distances))
+(s/def ::color-family-1 ::color-family)
+(s/def ::color-family-2 ::color-family)
+(s/def ::color-family-path ::color-family)
+(s/def ::render-state (s/keys :req [::type
+                                    ::status
+                                    ::grid
+                                    ::dist-1
+                                    ::color-family-1
+                                    ::dist-2
+                                    ::color-family-2
+                                    ::path
+                                    ::color-family-path]))
+(s/def ::distances ::g/distances)
+(s/def ::color-family ::color-family)
+(s/def ::expected-max-distance int?)
+(s/def ::distance-map (s/keys :req [::distances
+                                    ::color-family
+                                    ::expected-max-distance]))
+(s/def ::path-map (s/keys :req [::distances
+                                ::color-family]))
+
+
 ;; I think this animation-state stuff should really be in image as render-state
 ;; or something like that, because it will be useful in the plain Clojure
 ;; version as well.  But at the moment, this namespace doesn't have a dependency
 ;; on image, so I want to think about it before I do that.
-(def ColorFamily
-  (apply s/enum (keys util/color-families)))
 
-(def RenderState
-  "Schema for animation frame state"
-  {:type              (s/eq :RenderState)
-   :status            (s/maybe s/Str)
-   :grid              (s/maybe g/Grid)
-   :dist-1            (s/maybe g/Distances)
-   :color-family-1    ColorFamily
-   :dist-2            (s/maybe g/Distances)
-   :color-family-2    ColorFamily
-   :path              (s/maybe g/Distances)
-   :color-family-path ColorFamily
-   })
-
-(def render-state {:type :RenderState
-                   :status nil
-                   :grid nil
-                   :dist-1 nil
-                   :color-family-1 :green
-                   :dist-2 nil
-                   :color-family-2 :blue
-                   :path nil
-                   :color-family-path :red
+(def render-state {::type :RenderState
+                   ::status nil
+                   ::grid nil
+                   ::dist-1 nil
+                   ::color-family-1 :green
+                   ::dist-2 nil
+                   ::color-family-2 :blue
+                   ::path nil
+                   ::color-family-path :red
                    })
 
 ;; To debug the optimized drawing:
@@ -64,70 +78,72 @@
   (.lineTo g x2 y2)
   (.stroke g))
 
-(def DistanceMap
-  "Schema for Distances with rendering info"
-  {:distances g/Distances
-   :color-family s/Keyword
-   :expected-max-distance s/Int})
-
-(def PathMap
-  "Schema for Path with rendering info"
-  {:distances g/Distances
-   :color-family s/Keyword})
-
 (def strokewidth 1.0)
 
-(s/defn draw-cell-backgrounds [g
-                               grid :- g/Grid
-                               cell-size :- g/NonNegativeInt
-                               background :- s/Str
-                               distance-maps :- [DistanceMap]
-                               changed-cells]
+(s/fdef draw-cell-backgrounds
+        :args (s/cat :g identity :grid ::g/grid :cell-size ::g/non-negative?
+                     :background string? :distance-maps (s/coll-of ::distance-map {})
+                     :changed-cells (s/coll-of ::g/cell-position #{})))
+
+(defn draw-cell-backgrounds [g
+                             grid
+                             cell-size
+                             background
+                             distance-maps
+                             changed-cells]
   (doseq [coord changed-cells]
-    (let [{:keys [distances color-family expected-max-distance] :as distance-map} (first (filter #(contains? (:distances %) coord) distance-maps))
+    (let [{:keys [::distances ::color-family ::expected-max-distance] :as distance-map} (first (filter #(contains? (::distances %) coord) distance-maps))
           [y x] (map #(* % cell-size) coord)
           cell (g/grid-cell grid coord)
-          x (if (g/linked? cell (:west cell)) (- x 0.5) x)
-          y (if (g/linked? cell (:north cell)) (- y 0.5) y)
-          w (if (g/linked? cell (:east cell)) (+ cell-size 0.5) cell-size)
-          h (if (g/linked? cell (:south cell)) (+ cell-size 0.5) cell-size)
+          x (if (g/linked? cell (::g/west cell)) (- x 0.5) x)
+          y (if (g/linked? cell (::g/north cell)) (- y 0.5) y)
+          w (if (g/linked? cell (::g/east cell)) (+ cell-size 0.5) cell-size)
+          h (if (g/linked? cell (::g/south cell)) (+ cell-size 0.5) cell-size)
           ;; Ignore max-distance until optimized rendering is completely working.
           ;; Right now, this causes a distracting sudden darkening of the colors
           ;; at the end of each distances pass.
           ;; max-distance (if (:max-coord distances) (:max distances) expected-max-distance)
-          max-distance (:max distances)
+          max-distance (::g/max distances)
           color (if distance-map
                   (util/make-color max-distance (distances coord) color-family)
                   background)]
       (fill-rect g color x y w h))))
 
-(s/defn draw-cell-walls [g
-                         grid :- g/Grid
-                         cell-size :- g/NonNegativeInt
-                         wall :- s/Str
-                         changed-cells]
+(s/fdef draw-cell-walls
+        :args (s/cat :g identity :grid ::g/grid :cell-size ::g/non-negative?
+                     :wall string? ::changed-cells (s/coll-of ::g/cell-position #{})))
+
+(defn draw-cell-walls [g
+                       grid
+                       cell-size
+                       wall
+                       changed-cells]
   (doseq [coord changed-cells]
     (let [[y1 x1] (map #(* % cell-size) coord)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
           cell (g/grid-cell grid coord)]
-      (when-not (:north cell) (draw-line g wall x1 y1 x2 y1))
-      (when-not (:west cell) (draw-line g wall x1 y1 x1 y2))
+      (when-not (::g/north cell) (draw-line g wall x1 y1 x2 y1))
+      (when-not (::g/west cell) (draw-line g wall x1 y1 x1 y2))
 
-      (when-not (g/linked? cell (:east cell)) (draw-line g wall x2 y1 x2 y2))
-      (when-not (g/linked? cell (:south cell)) (draw-line g wall x1 y2 x2 y2)))))
+      (when-not (g/linked? cell (::g/east cell)) (draw-line g wall x2 y1 x2 y2))
+      (when-not (g/linked? cell (::g/south cell)) (draw-line g wall x1 y2 x2 y2)))))
 
 (defn center [coord cell-size]
   (map #(+ (* % cell-size) (/ cell-size 2)) (reverse coord)))
 
-(s/defn draw-path [g
-                   cell-size :- g/NonNegativeInt
-                   path-map :- PathMap
-                   changed-cells]
+(s/fdef draw-path
+        :args (s/cat :g identity :cell-size ::g/non-negative?
+                     :path-map ::path-map :changed-cells (s/coll-of ::g/cell-position #{})))
+
+(defn draw-path [g
+                 cell-size
+                 path-map
+                 changed-cells]
   ;(println (str "Would draw path for " (count changed-cells) " cells."))
-  (let [path-distances (:distances path-map)
-        color (util/make-color 1 1 (:color-family path-map))
-        inverted-path-map (set/map-invert (dissoc path-distances :max))
-        path-cells (take-while (complement nil?) (map inverted-path-map (range (:max path-distances) -1 -1)))
+  (let [path-distances (::distances path-map)
+        color (util/make-color 1 1 (::color-family path-map))
+        inverted-path-map (set/map-invert (dissoc path-distances ::g/max))
+        path-cells (take-while (complement nil?) (map inverted-path-map (range (::g/max path-distances) -1 -1)))
         move-to (fn [g [x y]] (.moveTo g x y))
         line-to (fn [g [x y]] (.lineTo g x y))]
     (aset g "strokeStyle" "#f00")
@@ -138,30 +154,40 @@
       (line-to g (center next cell-size)))
     (.stroke g)))
 
-(s/defn draw-cells [g
-                    grid :- g/Grid
-                    cell-size :- g/NonNegativeInt
-                    background :- s/Str
-                    wall :- s/Str
-                    distance-maps :- [DistanceMap]
-                    path-map :- (s/maybe PathMap)]
+(s/fdef draw-cells
+        :args (s/cat :g identity :grid ::g/grid :cell-size ::g/non-negative?
+                     :background string? :wall string?
+                     :distance-maps (s/coll-of ::distance-map [])
+                     :path-map (s/? ::path-map)))
+
+(defn draw-cells [g
+                  grid
+                  cell-size
+                  background
+                  wall
+                  distance-maps
+                  path-map]
   (let [changed-cells (or (when-not optimize-drawing (set (g/grid-coords grid)))
-                          (when path-map (:changed-cells (:distances path-map)))
-                          (first (map (comp :changed-cells :distances) distance-maps))
-                          (:changed-cells grid)
+                          (when path-map (::g/changed-cells (::distances path-map)))
+                          (first (map (comp ::g/changed-cells ::distances) distance-maps))
+                          (::g/changed-cells grid)
                           (set (g/grid-coords grid)))]
     (draw-cell-backgrounds g grid cell-size background distance-maps changed-cells)
     (draw-cell-walls g grid cell-size wall changed-cells)
     (when path-map (draw-path g cell-size path-map changed-cells))
   ))
 
-(s/defn image-grid [g
-                    {:keys [grid
-                            dist-1 color-family-1
-                            dist-2 color-family-2
-                            path color-family-path]} :- RenderState
-                    cell-size :- g/NonNegativeInt]
-  (let [{:keys [rows columns]} grid
+(s/fdef image-grid
+        :args (s/cat :g identity :render-state ::render-state :cell-size ::g/non-negative?))
+
+(defn image-grid [g
+                  {:keys [::grid
+                          ::dist-1 ::color-family-1
+                          ::dist-2 ::color-family-2
+                          ::path ::color-family-path] :as render-state}
+                  cell-size]
+  (let [{rows ::g/rows columns ::g/cols} grid
+        _ (println (str "rows: " rows))
         img-width (inc (* cell-size columns))
         img-height (inc (* cell-size rows))
         background "#fff"
@@ -169,10 +195,10 @@
         ;; The need for these DistanceMap values is a holdover, but for now I'm
         ;; going to leave them here to contain the ripple effects from changing
         ;; to the RenderState objects.
-        dist-specs (remove #(nil? (:distances %))
-                           [{:distances dist-2 :color-family color-family-2 :expected-max-distance (g/grid-size g)}
-                            {:distances dist-1 :color-family color-family-1 :expected-max-distance (g/grid-size g)}])
-        path-spec (when path {:distances path :color-family color-family-path})
+        dist-specs (remove #(nil? (::distances %))
+                           [{::distances dist-2 ::color-family color-family-2 ::expected-max-distance (g/grid-size g)}
+                            {::distances dist-1 ::color-family color-family-1 ::expected-max-distance (g/grid-size g)}])
+        path-spec (when path {::distances path ::color-family color-family-path})
         ;; if we aren't optimizing drawing, discard optimization information
         ;grid (if *optimize-drawing* grid (assoc grid :changed-cells nil))
         ]

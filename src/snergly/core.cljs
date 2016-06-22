@@ -21,7 +21,7 @@
       (xact! reconciler (snergly.core/set-status {:status msg})))
     (report-update [_ r-state]
       (xact! reconciler
-             (snergly.core/set-status {:status (:status r-state)})
+             (snergly.core/set-status {:status (::image/status r-state)})
              (snergly.core/set-render-state {:render-state r-state})))))
 
 (def init-data

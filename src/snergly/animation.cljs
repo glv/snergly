@@ -1,7 +1,6 @@
 (ns snergly.animation
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require [cljs.core.async :as async]
-            [schema.core :as s :include-macros true]
             [snergly.algorithms :as algs]
             [snergly.grid :as grid]
             [snergly.protocols :as protocols]
@@ -24,46 +23,46 @@
                       :else          nil))))]
     (chain-update-seqs* ((first fs)) (rest fs))))
 
-(defn produce-distances [{:keys [grid] :as r-state}
+(defn produce-distances [{:keys [::i/grid] :as r-state}
                          {:keys [start-row start-col] :as maze-params}
                          ui dist-key prev-dist-key]
   (let [prev-distances (when prev-dist-key (prev-dist-key r-state))
-        start (if prev-distances (:max-coord prev-distances) [start-row start-col])
-        new-r-state (assoc r-state :status "Finding distances …")
+        start (if prev-distances (::grid/max-coord prev-distances) [start-row start-col])
+        new-r-state (assoc r-state ::i/status "Finding distances …")
         expected-max (* (grid/grid-size grid) 0.8)]
     (sequence (comp algs/updates-only
                     (map #(assoc new-r-state dist-key %)))
               (algs/distances-seq grid start))))
 
-(defn produce-path [{:keys [grid] :as r-state}
+(defn produce-path [{:keys [::i/grid] :as r-state}
                     {:keys [end-row end-col] :as maze-params}
                     ui prev-dist-key longest?]
   (let [prev-distances (prev-dist-key r-state)
-        goal (if longest? (:max-coord prev-distances) [end-row end-col])
+        goal (if longest? (::grid/max-coord prev-distances) [end-row end-col])
         message (str "Plotting path (" (inc (prev-distances goal)) " cells long) …")
-        new-r-state (assoc r-state :status message)]
+        new-r-state (assoc r-state ::i/status message)]
     (sequence (comp algs/updates-only
-                    (map #(assoc new-r-state :path %)))
+                    (map #(assoc new-r-state ::i/path %)))
               (algs/path-seq grid prev-distances goal))))
 
 (defn analysis-steps [{:keys [analysis] :as maze-params} ui]
   (println (str "analysis: " analysis))
   (condp = analysis
     "none"         []
-    "distances"    [#(produce-distances % maze-params ui :dist-1 nil    )]
-    "path"         [#(produce-distances % maze-params ui :dist-1 nil    )
-                    #(produce-path      % maze-params ui :dist-1 false  )]
-    "longest path" [#(produce-distances % maze-params ui :dist-1 nil    )
-                    #(produce-distances % maze-params ui :dist-2 :dist-1)
-                    #(produce-path      % maze-params ui :dist-2 true   )]))
+    "distances"    [#(produce-distances % maze-params ui ::i/dist-1 nil       )]
+    "path"         [#(produce-distances % maze-params ui ::i/dist-1 nil       )
+                    #(produce-path      % maze-params ui ::i/dist-1 false     )]
+    "longest path" [#(produce-distances % maze-params ui ::i/dist-1 nil       )
+                    #(produce-distances % maze-params ui ::i/dist-2 ::i/dist-1)
+                    #(produce-path      % maze-params ui ::i/dist-2 true      )]))
 
 (defn produce-maze [{:keys [rows columns algorithm] :as maze-params} ui]
   (println (str "algorithm: " algorithm))
   (let [initial-grid (grid/make-grid rows columns)
-        initial-state (assoc i/render-state :status "Carving maze …")
+        initial-state (assoc i/render-state ::i/status "Carving maze …")
         algorithm-fn #((algs/algorithm-functions algorithm) initial-grid)]
     (sequence (comp algs/updates-only
-                    (map #(assoc initial-state :grid %)))
+                    (map #(assoc initial-state ::i/grid %)))
               (cons initial-grid (algorithm-fn)))))
 
 (defn run-animation [maze-params ui frame-chan]

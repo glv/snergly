@@ -4,7 +4,6 @@
   (:require #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async])
                     [clojure.set :as set]
-                    [schema.core :as s :include-macros true]
                     [snergly.grid :as g]
                     [snergly.util :as util]
                     [snergly.grid :as grid]))
@@ -55,18 +54,18 @@
         (cons next-grid (binary-tree-seq* (g/begin-step next-grid) coords))))))
 
 (defn binary-tree-seq [grid]
-  (binary-tree-seq* (g/begin-step (assoc grid :algorithm-name "binary-tree")) (g/grid-coords grid)))
+  (binary-tree-seq* (g/begin-step (assoc grid ::g/algorithm-name "binary-tree")) (g/grid-coords grid)))
 
 (defn sidewinder-end-run? [cell]
-  (let [on-east-side? (not (:east cell))
-        on-north-side? (not (:north cell))]
+  (let [on-east-side? (not (::g/east cell))
+        on-north-side? (not (::g/north cell))]
     (or on-east-side?
         (and (not on-north-side?)
              (= 0 (rand-int 2))))))
 
 (defn sidewinder-end-run [grid run]
   (let [cell (g/grid-cell grid (rand-nth run))
-        north-neighbor (:north cell)]
+        north-neighbor (::g/north cell)]
     (if north-neighbor
       (g/link-cells grid cell north-neighbor)
       grid)))
@@ -76,7 +75,7 @@
         end-run? (sidewinder-end-run? cell)
         new-grid (if end-run?
                    (sidewinder-end-run grid run)
-                   (g/link-cells grid cell (:east cell)))]
+                   (g/link-cells grid cell (::g/east cell)))]
     [new-grid (if end-run? [] run)]))
 
 (defn sidewinder-seq* [grid [coord & coords] current-run]
@@ -87,7 +86,7 @@
 
 (defn sidewinder-seq [grid]
   (let [coords (g/grid-coords grid)]
-    (sidewinder-seq* (g/begin-step (assoc grid :algorithm-name "sidewinder")) coords [(first coords)])))
+    (sidewinder-seq* (g/begin-step (assoc grid ::g/algorithm-name "sidewinder")) coords [(first coords)])))
 
 (defn aldous-broder-seq* [grid current unvisited]
   (lazy-seq
@@ -95,7 +94,7 @@
       (cons grid nil)
       (let [cell (g/grid-cell grid current)
             neighbor (rand-nth (g/cell-neighbors cell))
-            neighbor-new? (empty? (:links (g/grid-cell grid neighbor)))
+            neighbor-new? (empty? (::g/links (g/grid-cell grid neighbor)))
             new-grid (if neighbor-new?
                        (g/link-cells grid cell neighbor)
                        grid)]
@@ -104,7 +103,7 @@
                                            (if neighbor-new? (dec unvisited) unvisited)))))))
 
 (defn aldous-broder-seq [grid]
-  (aldous-broder-seq* (g/begin-step (assoc grid :algorithm-name "aldous-broder"))
+  (aldous-broder-seq* (g/begin-step (assoc grid ::g/algorithm-name "aldous-broder"))
                       (g/random-coord grid)
                       (dec (g/grid-size grid))))
 
@@ -140,22 +139,22 @@
       (wilsons-carve-passage grid unvisited (partition 2 1 path)))))
 
 (defn wilsons-seq [grid]
-  (wilsons-seq* (g/begin-step (assoc grid :algorithm-name "wilsons"))
+  (wilsons-seq* (g/begin-step (assoc grid ::g/algorithm-name "wilsons"))
                 (rest (shuffle (g/grid-coords grid)))))
 
 (defn hunt-and-kill-start-new-walk [grid]
   (loop [[current-coord & other-coords] (g/grid-coords grid)]
     (let [current-cell (g/grid-cell grid current-coord)
-          visited-neighbors (remove #(empty? (:links (g/grid-cell grid %))) (g/cell-neighbors current-cell))]
+          visited-neighbors (remove #(empty? (::g/links (g/grid-cell grid %))) (g/cell-neighbors current-cell))]
       (cond
-        (and (empty? (:links current-cell))
+        (and (empty? (::g/links current-cell))
              (not-empty visited-neighbors)) [(g/link-cells grid current-cell (rand-nth visited-neighbors)) current-coord]
         (empty? other-coords) [grid nil]
         :else (recur other-coords)))))
 
 (defn hunt-and-kill-step [grid current-coord]
   (let [current-cell (g/grid-cell grid current-coord)
-        unvisited-neighbors (filter #(empty? (:links (g/grid-cell grid %)))
+        unvisited-neighbors (filter #(empty? (::g/links (g/grid-cell grid %)))
                                     (g/cell-neighbors current-cell))]
     (if (empty? unvisited-neighbors)
       (hunt-and-kill-start-new-walk grid)
@@ -171,13 +170,13 @@
               (hunt-and-kill-seq* (g/begin-step new-grid) next-coord))))))
 
 (defn hunt-and-kill-seq [grid]
-  (hunt-and-kill-seq* (g/begin-step (assoc grid :algorithm-name "hunt-and-kill")) (g/random-coord grid)))
+  (hunt-and-kill-seq* (g/begin-step (assoc grid ::g/algorithm-name "hunt-and-kill")) (g/random-coord grid)))
 
 (defn recursive-backtracker-step [grid stack]
   (let [grid (g/begin-step grid)
         current-coord (first stack)
         current-cell (g/grid-cell grid current-coord)
-        unvisited-neighbors (filter #(empty? (:links (g/grid-cell grid %)))
+        unvisited-neighbors (filter #(empty? (::g/links (g/grid-cell grid %)))
                                     (g/cell-neighbors current-cell))]
     (if (empty? unvisited-neighbors)
       [grid (rest stack)]
@@ -193,7 +192,7 @@
         (cons new-grid (recursive-backtracker-seq* (g/begin-step new-grid) new-stack))))))
 
 (defn recursive-backtracker-seq [grid]
-  (recursive-backtracker-seq* (g/begin-step (assoc grid :algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))
+  (recursive-backtracker-seq* (g/begin-step (assoc grid ::g/algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))
 
 ;; There are a couple of weird, sporadic rendering bugs that are hard to track
 ;; down because they only appear on some mazes.  This is a deterministic
@@ -204,15 +203,15 @@
     (when coord
       (let [cell (g/grid-cell grid coord)
             next-grid (cond
-                        (:east cell) (g/link-cells grid cell (:east cell))
-                        (and (odd? row) (:south cell)) (let [first-on-row (g/grid-cell grid [row 0])]
-                                                         (g/link-cells grid first-on-row (:south first-on-row)))
-                        (and (even? row) (:south cell)) (g/link-cells grid cell (:south cell))
+                        (::g/east cell) (g/link-cells grid cell (::g/east cell))
+                        (and (odd? row) (::g/south cell)) (let [first-on-row (g/grid-cell grid [row 0])]
+                                                          (g/link-cells grid first-on-row (::g/south first-on-row)))
+                        (and (even? row) (::g/south cell)) (g/link-cells grid cell (::g/south cell))
                         :else grid)]
       (cons next-grid (pessimal-seq* (g/begin-step next-grid) coords))))))
 
 (defn pessimal-seq [grid]
-  (pessimal-seq* (g/begin-step (assoc grid :algorithm-name "pessimal")) (g/grid-coords grid)))
+  (pessimal-seq* (g/begin-step (assoc grid ::g/algorithm-name "pessimal")) (g/grid-coords grid)))
 
 ;; distances-seq advances on each iteration of Dijkstra's algorithm --- in
 ;; other words, for each cell that's on the current wavefront of the flood.
@@ -232,22 +231,22 @@
         ([result] (xf (xf result @prev)))
         ([result input]
          (let [prior @prev]
-           (if (and prior (> (:max input) (:max prior)))
+           (if (and prior (> (::g/max input) (::g/max prior)))
              (do
                (vreset! prev input)
                (xf result prior))
              (do
-               (vreset! prev (update input :changed-cells set/union (:changed-cells prior)))
+               (vreset! prev (update input ::g/changed-cells set/union (::g/changed-cells prior)))
                result))))))))
 
 (defn distances-seq* [grid distances current frontier]
   (lazy-seq
     (let [cell (g/grid-cell grid current)
           current-distance (distances current)
-          links (remove #(contains? distances %) (:links cell))
+          links (remove #(contains? distances %) (::g/links cell))
           next-frontier (apply conj frontier links)]
       (if (empty? next-frontier)
-        (cons (assoc distances :max-coord current) nil)
+        (cons (assoc distances ::g/max-coord current) nil)
         (let [new-distances (if (empty? links)
                               distances
                               (g/add-distances distances links (inc current-distance)))]
@@ -262,24 +261,24 @@
                                               #?(:clj PersistentQueue/EMPTY
                                                  :cljs #queue []))))))
 
-(defn path-seq* [grid {:keys [origin] :as distances} current breadcrumbs]
+(defn path-seq* [grid {:keys [::g/origin] :as distances} current breadcrumbs]
   (lazy-seq
     (if (= current origin)
       (cons breadcrumbs nil)
       (let [current-distance (distances current)
             neighbor (first (filter #(< (distances %) current-distance)
-                                    (:links (g/grid-cell grid current))))
+                                    (::g/links (g/grid-cell grid current))))
             new-breadcrumbs (g/add-distances breadcrumbs [neighbor] (distances neighbor))]
       (cons new-breadcrumbs (path-seq* grid distances neighbor (g/begin-step new-breadcrumbs)))))))
 
 (defn path-seq [grid distances goal]
   (lazy-seq
     (let [goal-distance (distances goal)
-          breadcrumbs (assoc (g/add-distances (g/make-distances (:origin distances))
+          breadcrumbs (assoc (g/add-distances (g/make-distances (::g/origin distances))
                                               [goal]
                                               goal-distance)
-                        :max goal-distance
-                        :max-coord goal)]
+                        ::g/max goal-distance
+                        ::g/max-coord goal)]
       (cons breadcrumbs (path-seq* grid distances goal (g/begin-step breadcrumbs))))))
 
 ;; TODO: it would be easy for a bunch of inefficiency to hide in this
@@ -310,22 +309,22 @@
 #?(:clj
    (defn algorithm-fn [name options]
      (let [algorithm #(last ((algorithm-functions name) %))
-           analyze-distances (fn [maze] (last (distances-seq maze (:distances options))))
+           analyze-distances (fn [maze] (last (distances-seq maze (::g/distances options))))
            analyze-path (fn [maze] (last (path-seq maze (analyze-distances maze) (:path-to options))))
            analyze-longest-path (fn [maze]
                                   (let [distances (last (distances-seq maze [0 0]))
-                                        distances-from-farthest (last (distances-seq maze (:max-coord distances)))]
-                                    (last (path-seq maze distances-from-farthest (:max-coord distances-from-farthest)))))
+                                        distances-from-farthest (last (distances-seq maze (::g/max-coord distances)))]
+                                    (last (path-seq maze distances-from-farthest (::g/max-coord distances-from-farthest)))))
            analyze (cond
                      (:longest options) analyze-longest-path
                      (:path-to options) analyze-path
                      (:distances options) analyze-distances
                      :else (fn [_] {}))]
        (fn [grid]
-         (let [maze (assoc (algorithm grid) :changed-cells (into #{} (g/grid-coords grid)))
+         (let [maze (assoc (algorithm grid) ::g/changed-cells (into #{} (g/grid-coords grid)))
                analysis (analyze maze)
-               analysis (assoc analysis :changed-cells (into #{} (filter vector? (keys analysis))))]
+               analysis (assoc analysis ::g/changed-cells (into #{} (filter vector? (keys analysis))))]
            (g/grid-annotate-cells maze
                                   {:label (g/xform-values util/base36 analysis)
-                                   :color (g/xform-values #(util/make-color (:max analysis) %) analysis)})))))
+                                   :color (g/xform-values #(util/make-color (::g/max analysis) %) analysis)})))))
    )

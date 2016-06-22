@@ -4,10 +4,11 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.clojure-test :refer :all]
-            [schema.test]
+            [clojure.spec :as s]
+            [clojure.spec.test :as st]
             [snergly.grid :refer :all]))
 
-(use-fixtures :once schema.test/validate-schemas)
+(s/instrument-ns 'snergly.grid)
 
 (def gen-dimen
   (gen/fmap inc gen/s-pos-int))
@@ -30,7 +31,7 @@
   (prop/for-all [[rows row] gen-dimen-and-coord
                  [cols col] gen-dimen-and-coord]
     (let [cell (make-cell row col rows cols)]
-      (valid-coord? rows cols (:coord cell)))))
+      (valid-coord? rows cols (:snergly.grid/coord cell)))))
 
 (defspec cell-knows-about-neighbors
   50
@@ -38,17 +39,17 @@
                  [cols col] gen-dimen-and-coord]
     (let [cell (make-cell row col rows cols)]
       (and (if (> row 0)
-             (= (:north cell) [(dec row) col])
-             (nil? (:north cell)))
+             (= (:snergly.grid/north cell) [(dec row) col])
+             (nil? (:snergly.grid/north cell)))
            (if (< row (dec rows))
-             (= (:south cell) [(inc row) col])
-             (nil? (:south cell)))
+             (= (:snergly.grid/south cell) [(inc row) col])
+             (nil? (:snergly.grid/south cell)))
            (if (> col 0)
-             (= (:west cell) [row (dec col)])
-             (nil? (:west cell)))
+             (= (:snergly.grid/west cell) [row (dec col)])
+             (nil? (:snergly.grid/west cell)))
            (if (< col (dec cols))
-             (= (:east cell) [row (inc col)])
-             (nil? (:east cell)))))))
+             (= (:snergly.grid/east cell) [row (inc col)])
+             (nil? (:snergly.grid/east cell)))))))
 
 (defspec cell-neighbors-returns-all-neighbors
   100
@@ -71,9 +72,9 @@
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
     (let [grid (make-grid rows cols)]
-      (and (= rows (:rows grid))
-           (= cols (:columns grid))
-           (= (* rows cols) (count (:cells grid)))))))
+      (and (= rows (:snergly.grid/rows grid))
+           (= cols (:snergly.grid/cols grid))
+           (= (* rows cols) (count (:snergly.grid/cells grid)))))))
 
 (defspec random-coords-are-within-grid
   100
