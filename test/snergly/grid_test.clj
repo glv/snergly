@@ -10,7 +10,6 @@
   (testing "middle cell"
     (let [cell (g/make-cell 3 5 10 15)]
       (are [expected key] (= expected (key cell))
-        :Cell ::g/type
         [3 5] ::g/coord
         [2 5] ::g/north
         [4 5] ::g/south
@@ -46,7 +45,6 @@
 (deftest t-make-grid
   (let [grid (g/make-grid 2 3)]
     (are [expected key] (= expected (key grid))
-      :Grid ::g/type
       2 ::g/rows
       3 ::g/cols)
     (is (= 6 (count (::g/cells grid))))

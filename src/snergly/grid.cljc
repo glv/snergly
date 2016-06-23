@@ -30,8 +30,6 @@
 (s/def ::non-negative?  (s/and integer? (comp not neg?)))
 (s/def ::cell-position  (s/tuple ::non-negative? ::non-negative?))
 
-(s/def ::type           keyword?) ; make this better
-
 ;; cell
 (s/def ::neighbor       (s/nilable ::cell-position))
 
@@ -41,8 +39,7 @@
 (s/def ::east           ::neighbor)
 (s/def ::west           ::neighbor)
 (s/def ::links          (s/and (s/coll-of ::cell-position #{}) set?))
-(s/def ::cell           (s/keys :req [::type
-                                      ::coord
+(s/def ::cell           (s/keys :req [::coord
                                       ::north ::south ::east ::west
                                       ::links])) ; any others? annotations?
 
@@ -83,15 +80,13 @@
                      #(< (:row %) (:rows %))
                      #(< (:col %) (:cols %)))
         :ret ::cell
-        :fn (s/and #(= (-> % :ret ::type) :Cell)
-                   #(= (-> % :ret ::coord first) (-> % :args :row))
+        :fn (s/and #(= (-> % :ret ::coord first) (-> % :args :row))
                    #(= (-> % :ret ::coord second) (-> % :args :col))
                    #(empty? (-> % :ret ::links))))
 
 (defn make-cell
   [row col rows cols]
-  {::type  :Cell
-   ::coord [row col]
+  {::coord [row col]
    ::north (when (> row 0) [(dec row) col])
    ::south (when (< row (dec rows)) [(inc row) col])
    ::east  (when (< col (dec cols)) [row (inc col)])
@@ -122,8 +117,7 @@
 (defn make-grid
   "Creates and returns a new grid with the specified row and column sizes."
   [rows cols]
-  {::type           :Grid
-   ::algorithm-name "none"
+  {::algorithm-name "none"
    ::rows           rows
    ::cols           cols
    ::cells          (into [] (for [row (range rows) col (range cols)]
@@ -248,8 +242,7 @@
 (defn make-distances
   "Creates and returns a new distances object with the supplied origin."
   [origin]
-  {::type          :Distances
-   ::origin        origin
+  {::origin        origin
    ::max           0
    origin          0
    ::changed-cells #{origin}})

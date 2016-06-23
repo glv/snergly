@@ -10,7 +10,6 @@
 
 (def optimize-drawing false)
 
-(s/def ::type           symbol?) ; make this better
 (s/def ::color-family (set (keys util/color-families)))
 (s/def ::status (s/nilable string?))
 (s/def ::grid (s/nilable ::g/grid))
@@ -20,8 +19,7 @@
 (s/def ::color-family-1 ::color-family)
 (s/def ::color-family-2 ::color-family)
 (s/def ::color-family-path ::color-family)
-(s/def ::render-state (s/keys :req [::type
-                                    ::status
+(s/def ::render-state (s/keys :req [::status
                                     ::grid
                                     ::dist-1
                                     ::color-family-1
@@ -44,8 +42,7 @@
 ;; version as well.  But at the moment, this namespace doesn't have a dependency
 ;; on image, so I want to think about it before I do that.
 
-(def render-state {::type :RenderState
-                   ::status nil
+(def render-state {::status nil
                    ::grid nil
                    ::dist-1 nil
                    ::color-family-1 :green
