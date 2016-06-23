@@ -57,15 +57,15 @@
   (binary-tree-seq* (g/begin-step (assoc grid ::g/algorithm-name "binary-tree")) (g/grid-coords grid)))
 
 (defn sidewinder-end-run? [cell]
-  (let [on-east-side? (not (::g/east cell))
-        on-north-side? (not (::g/north cell))]
+  (let [on-east-side? (not (g/cell-neighbor cell :east))
+        on-north-side? (not (g/cell-neighbor cell :north))]
     (or on-east-side?
         (and (not on-north-side?)
              (= 0 (rand-int 2))))))
 
 (defn sidewinder-end-run [grid run]
   (let [cell (g/grid-cell grid (rand-nth run))
-        north-neighbor (::g/north cell)]
+        north-neighbor (g/cell-neighbor cell :north)]
     (if north-neighbor
       (g/link-cells grid cell north-neighbor)
       grid)))
@@ -75,7 +75,7 @@
         end-run? (sidewinder-end-run? cell)
         new-grid (if end-run?
                    (sidewinder-end-run grid run)
-                   (g/link-cells grid cell (::g/east cell)))]
+                   (g/link-cells grid cell (g/cell-neighbor cell :east)))]
     [new-grid (if end-run? [] run)]))
 
 (defn sidewinder-seq* [grid [coord & coords] current-run]
@@ -203,10 +203,10 @@
     (when coord
       (let [cell (g/grid-cell grid coord)
             next-grid (cond
-                        (::g/east cell) (g/link-cells grid cell (::g/east cell))
-                        (and (odd? row) (::g/south cell)) (let [first-on-row (g/grid-cell grid [row 0])]
+                        (g/cell-neighbor cell :east) (g/link-cells grid cell (g/cell-neighbor cell :east))
+                        (and (odd? row) (g/cell-neighbor cell :south)) (let [first-on-row (g/grid-cell grid [row 0])]
                                                           (g/link-cells grid first-on-row (::g/south first-on-row)))
-                        (and (even? row) (::g/south cell)) (g/link-cells grid cell (::g/south cell))
+                        (and (even? row) (g/cell-neighbor cell :south)) (g/link-cells grid cell (g/cell-neighbor cell :south))
                         :else grid)]
       (cons next-grid (pessimal-seq* (g/begin-step next-grid) coords))))))
 

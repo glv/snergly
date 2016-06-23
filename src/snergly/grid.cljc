@@ -11,7 +11,7 @@
 ;; For snergly.algorithms:
 ;;
 ;; * grid, w: (g/grid-set-algorithm grid "algorithm-name")
-;; * cell, r: (g/cell-neighbor cell :east)
+;; * √ cell, r: (g/cell-neighbor cell :east)
 ;; * cell, r: (g/cell-links cell)
 ;; * chgs, r: (g/changed-cells thing)
 ;; * dist, r: (g/max-distance distances)
@@ -98,6 +98,13 @@
    ::west  (when (> col 0) [row (dec col)])
    ::links #{}})
 
+(s/fdef cell-neighbor
+        :args (s/cat :cell ::cell :direction #{:north :south :east :west})
+        :ret (s/nilable ::cell-position))
+
+(defn cell-neighbor [cell direction]
+  (cell (keyword "snergly.grid" (name direction))))
+
 (s/fdef cell-neighbors
         :args (s/cat :cell ::cell
                      :directions (s/? (s/coll-of #{:north :south :east :west} [])))
@@ -106,7 +113,7 @@
 (defn cell-neighbors
   ([cell] (cell-neighbors cell [:north :south :east :west]))
   ([cell directions]
-    (filter identity (map cell (map #(keyword "snergly.grid" (name %)) directions)))))
+    (filter identity (map #(cell-neighbor cell %) directions))))
 
 (s/fdef make-grid
         :args (s/cat :rows ::grid-dimen :cols ::grid-dimen)
