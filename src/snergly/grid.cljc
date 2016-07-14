@@ -2,7 +2,9 @@
   (:require #?(:clj [clojure.spec :as s]
                :cljs [cljs.spec :as s])
             [snergly.util :as util]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            #?(:clj [clojure.spec.gen :as gen]
+               :cljs [cljs.spec.impl.gen :as gen])))
 
 ;; If we don't want other namespaces to have to use the keywords from this
 ;; namespace to gather information from these maps, what other methods would
@@ -27,10 +29,14 @@
 ;;
 
 ;; basic type constraints
-(s/def ::non-negative?  (s/and integer? (comp not neg?)))
-(s/def ::cell-position  (s/tuple ::non-negative? ::non-negative?))
+(s/def ::cell-coord     pos-int?)
+(s/def ::cell-position  (s/tuple ::cell-coord ::cell-coord))
+;; restrict grid sizes for testing, but allow larger grids in production.
+(s/def ::grid-dimen     (s/with-gen (s/and integer? #(>= % 2))
+                                    #(s/gen (s/int-in 2 25))))
 
 ;; cell
+(declare make-cell)
 (s/def ::neighbor       (s/nilable ::cell-position))
 
 (s/def ::coord          ::cell-position)
@@ -38,43 +44,84 @@
 (s/def ::south          ::neighbor)
 (s/def ::east           ::neighbor)
 (s/def ::west           ::neighbor)
-(s/def ::links          (s/and (s/coll-of ::cell-position #{}) set?))
-(s/def ::cell           (s/keys :req [::coord
-                                      ::north ::south ::east ::west
-                                      ::links])) ; any others? annotations?
+(s/def ::links          (s/coll-of ::cell-position :type set?))
+;; What are the other validity constraints that *could* be specified here?
+;; * nsew should either be nil or distance 1 from coord
+;; * n should be nil only if (first coord) is 0
+;; * w should be nil only if (second coord) is 0
+;; * validity of nil values for s and e depend on information outside the cell
+;;   (the dimensions of the grid)
+;; * values in links must be in nsew
+(s/def ::cell           (s/with-gen
+                          (s/keys :req [::coord
+                                        ::north ::south ::east ::west
+                                        ::links])
+                          (gen/fmap (fn [[rs cs]]
+                                      (let [r (rand-int rs)
+                                            c (rand-int cs)]
+                                        (make-cell r c rs cs)))
+                                    (let [dgen (s/gen ::grid-dimen)]
+                                      (gen/tuple dgen dgen))
+                                    )))
 
 ;; change tracking
-(s/def ::changed-cells  (s/nilable (s/and (s/coll-of ::cell-position #{}) set?)))
+(s/def ::changed-cells  (s/nilable (s/coll-of ::cell-position :type set?)))
 (s/def ::with-changes   (s/keys :req [::changed-cells]))
 
 ;; grid
-(s/def ::grid-dimen     (s/and integer? #(> % 1)))
-
+(declare make-grid)
 (s/def ::algorithm-name string?)
 (s/def ::rows           ::grid-dimen)
 (s/def ::cols           ::grid-dimen)
-(s/def ::cells          (s/and (s/coll-of ::cell []) vector?))
-(s/def ::grid           (s/keys :req [::algorithm-name
-                                      ::rows ::cols
-                                      ::cells]))
+(s/def ::cells          (s/coll-of ::cell :type vector?))
+;; What are the other validity constraints that *could* be specified here?
+;; * number of cells == (rows+1) * (cols+1)
+;; * one cell for each [row, col] permutation
+;; * cells are in row-major order
+;; * cells with row == (rows-1) have e nil
+;; * cells woth col == (cols-1) have s nil
+(s/def ::grid           (s/with-gen
+                          (s/keys :req [::algorithm-name
+                                        ::rows ::cols
+                                        ::cells])
+                          (gen/fmap (fn [[rs cs]] (make-grid rs cs))
+                                    (let [dgen (s/gen ::grid-dimen)]
+                                      (gen/tuple dgen dgen)))))
 
 ;; distances
 (s/def ::origin         ::cell-position)
-(s/def ::max            ::non-negative?)
+(s/def ::max            pos-int?)
 (s/def ::max-coord      ::cell-position)
-(s/def ::dist-or-annot  (s/or :origin (s/tuple ::origin ::cell-position)
-                              :max-coord (s/tuple ::max-coord ::cell-position)
-                              :max (s/tuple ::max ::non-negative?)
-                              :dist (s/tuple ::cell-position ::non-negative?)))
+(s/def ::dist-or-annot  (s/or :origin    (s/tuple #(= ::origin %)        ::cell-position)
+                              :max-coord (s/tuple #(= ::max-coord %)     ::cell-position)
+                              :max       (s/tuple #(= ::max %)           pos-int?)
+                              :changes   (s/tuple #(= ::changed-cells %) ::changed-cells)
+                              :dist      (s/tuple ::cell-position pos-int?)))
 
-(s/def ::distances      (and (s/coll-of ::dist-or-annot {}) map?))
-;(s/def ::distances      (s/keys :req [::origin ::max]
-;                                :opt [::max-coord])) ; also map-of ::cell-position ::non-negative?
-
+(s/def ::distances      (s/and (s/keys :req [::origin ::max] :opt [::max-coord])
+                               (s/coll-of ::dist-or-annot :type map?)))
+;; I think if I write the right macro, I can replace ::dist-or-annot
+;; and ::distances with this:
+;;
+;; (s/def ::distance-annotations (s/keys :req [::origin ::max] :opt [::max-coord]))
+;; (s/def ::distances            (s/merged ::distance-annotations
+;;                                         ::with-changes
+;;                                         (s/map-of ::cell-position pos-int?)))
+;;
+;; (I might have to use (s/coll-of [s/tuple ::cell-position pos-int?])
+;; instead of map/of.)
+;;
+;; But here's what Alex and Rich are working on:
+;;
+;; (s/def ::distances (s/key-cond
+;;                      keyword? (s/keys :req [::origin ::max] :opt [::max-coord])
+;;                      vector? (s/map-of ::cell-position pos-int?)))
+;;
+;; Much, much better!
 
 (s/fdef make-cell
-        :args (s/and (s/cat :row  ::non-negative?
-                            :col  ::non-negative?
+        :args (s/and (s/cat :row  ::cell-coord
+                            :col  ::cell-coord
                             :rows ::grid-dimen
                             :cols ::grid-dimen)
                      #(< (:row %) (:rows %))
@@ -102,8 +149,8 @@
 
 (s/fdef cell-neighbors
         :args (s/cat :cell ::cell
-                     :directions (s/? (s/coll-of #{:north :south :east :west} [])))
-        :ret (s/and (s/coll-of ::cell-position []) vector?))
+                     :directions (s/? (s/coll-of #{:north :south :east :west} :type vector?)))
+        :ret (s/coll-of ::cell-position :type vector?))
 
 (defn cell-neighbors
   ([cell] (cell-neighbors cell [:north :south :east :west]))
@@ -126,15 +173,17 @@
 
 (s/fdef cell-index
         ;; figure out how to name the destructured parts of :position
-        :args (s/cat :grid ::grid :position (s/tuple ::non-negative? ::non-negative?))
-        :ret ::non-negative?)
+        :args (s/cat :grid ::grid :position ::cell-position)
+        :ret pos-int?
+        :fn #(= (-> % :args :position)
+                (::coord (get (-> % :args :grid ::cells) (-> % :ret)))))
 
 (defn cell-index [grid [row col]]
   (+ (* row (::cols grid)) col))
 
 (s/fdef grid-cell
         ;; figure out how to name the destructured parts of :position
-        :args (s/cat :grid ::grid :position (s/tuple ::non-negative? ::non-negative?))
+        :args (s/cat :grid ::grid :position ::cell-position)
         :ret ::cell)
 
 (defn grid-cell [grid [row col]]
@@ -153,7 +202,7 @@
 (s/fdef grid-size
         ;; figure out how to name the destructured part of :grid
         :args (s/cat :grid ::grid)
-        :ret ::non-negative?)
+        :ret pos-int?)
 
 (defn grid-size [{:keys [::rows ::cols]}]
   (* rows cols))
@@ -163,9 +212,7 @@
         :args (s/cat :grid ::grid)
         ;; maybe this double-nesting could be made clearer by defining a
         ;; separate predicate, maybe ::row-coords or something.
-        :ret (s/and (s/coll-of (s/and (s/coll-of ::cell-position [])
-                                      vector?) [])
-                    vector?))
+        :ret (s/coll-of (s/coll-of ::cell-position :type vector?) :type vector?))
 
 (defn grid-row-coords [{:keys [::rows ::cols]}]
   "Grid cell coordinates, batched into rows."
@@ -175,7 +222,7 @@
 
 (s/fdef grid-coords
         :args (s/cat :grid ::grid)
-        :ret (s/and (s/coll-of ::cell-position []) vector?))
+        :ret (s/coll-of ::cell-position :type vector?))
 
 (defn grid-coords [{:keys [::rows ::cols]}]
   (for [row (range rows) col (range cols)]
@@ -183,7 +230,7 @@
 
 (s/fdef grid-deadends
         :args (s/cat :grid ::grid)
-        :ret (s/and (s/coll-of ::cell []) vector?))
+        :ret (s/coll-of ::cell :type vector?))
 
 (defn grid-deadends [grid]
   (filter #(= 1 (count (::links %)))
@@ -250,8 +297,8 @@
 (s/fdef add-distances
         ;; figure out how to name destructured parts
         :args (s/cat :distances ::distances
-                     :coords (s/coll-of ::cell-position [])
-                     :distance ::non-negative?)
+                     :coords (s/coll-of ::cell-position :type vector?)
+                     :distance pos-int?)
         :ret ::distances)
 
 (defn add-distances [{:keys [::changed-cells] :as distances}

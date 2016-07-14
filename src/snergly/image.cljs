@@ -27,7 +27,7 @@
                                     ::color-family-2
                                     ::path
                                     ::color-family-path]))
-(s/def ::distances ::g/distances)
+(s/def ::distances (s/and ::g/distances))
 (s/def ::color-family ::color-family)
 (s/def ::expected-max-distance int?)
 (s/def ::distance-map (s/keys :req [::distances
@@ -79,8 +79,8 @@
 
 (s/fdef draw-cell-backgrounds
         :args (s/cat :g identity :grid ::g/grid :cell-size ::g/non-negative?
-                     :background string? :distance-maps (s/coll-of ::distance-map {})
-                     :changed-cells (s/coll-of ::g/cell-position #{})))
+                     :background string? :distance-maps (s/coll-of ::distance-map :type map?)
+                     :changed-cells (s/coll-of ::g/cell-position :type set?)))
 
 (defn draw-cell-backgrounds [g
                              grid
@@ -108,7 +108,7 @@
 
 (s/fdef draw-cell-walls
         :args (s/cat :g identity :grid ::g/grid :cell-size ::g/non-negative?
-                     :wall string? ::changed-cells (s/coll-of ::g/cell-position #{})))
+                     :wall string? ::changed-cells (s/coll-of ::g/cell-position :type set?)))
 
 (defn draw-cell-walls [g
                        grid
@@ -130,7 +130,7 @@
 
 (s/fdef draw-path
         :args (s/cat :g identity :cell-size ::g/non-negative?
-                     :path-map ::path-map :changed-cells (s/coll-of ::g/cell-position #{})))
+                     :path-map ::path-map :changed-cells (s/coll-of ::g/cell-position :type set?)))
 
 (defn draw-path [g
                  cell-size
@@ -154,7 +154,7 @@
 (s/fdef draw-cells
         :args (s/cat :g identity :grid ::g/grid :cell-size ::g/non-negative?
                      :background string? :wall string?
-                     :distance-maps (s/coll-of ::distance-map [])
+                     :distance-maps (s/coll-of ::distance-map :type vector?)
                      :path-map (s/? ::path-map)))
 
 (defn draw-cells [g
@@ -187,22 +187,23 @@
         _ (println (str "rows: " rows))
         img-width (inc (* cell-size cols))
         img-height (inc (* cell-size rows))
-        background "#fff"
-        wall "#000"
+        background "#fff"                                ; cljs
+        wall "#000"                                      ; cljs
         ;; The need for these DistanceMap values is a holdover, but for now I'm
         ;; going to leave them here to contain the ripple effects from changing
         ;; to the RenderState objects.
         dist-specs (remove #(nil? (::distances %))
-                           [{::distances dist-2 ::color-family color-family-2 ::expected-max-distance (g/grid-size g)}
-                            {::distances dist-1 ::color-family color-family-1 ::expected-max-distance (g/grid-size g)}])
+                           [{::distances dist-2 ::color-family color-family-2 ::expected-max-distance (g/grid-size grid)}
+                            {::distances dist-1 ::color-family color-family-1 ::expected-max-distance (g/grid-size grid)}])
         path-spec (when path {::distances path ::color-family color-family-path})
         ;; if we aren't optimizing drawing, discard optimization information
         ;grid (if *optimize-drawing* grid (assoc grid :changed-cells nil))
         ]
-    (aset g "imageSmoothingEnabled" false)
-    (aset g "fillStyle" background)
-    (aset g "lineWidth" strokewidth)
-    (when (g/new? grid) (fill-rect g background 0 0 img-width img-height))
+    (aset g "imageSmoothingEnabled" false)               ; cljs
+    (aset g "fillStyle" background)                      ; cljs
+    (aset g "lineWidth" strokewidth)                     ; cljs
+    (when (g/new? grid)
+      (fill-rect g background 0 0 img-width img-height)) ; cljs
     (draw-cells g grid cell-size background wall dist-specs path-spec)
     )
   )

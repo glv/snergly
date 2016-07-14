@@ -4,7 +4,7 @@
             [clojure.spec.test :as st]
             [snergly.grid :as g]))
 
-(s/instrument-ns 'snergly.grid)
+(st/instrument 'snergly.grid)
 
 (deftest t-make-cell
   (testing "middle cell"

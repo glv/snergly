@@ -4,8 +4,8 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :main ^:skip-aot snergly.core
-  :dependencies [[org.clojure/clojure "1.9.0-alpha7"]
-                 [org.clojure/clojurescript "1.9.76"]
+  :dependencies [[org.clojure/clojure "1.9.0-alpha10"]
+                 [org.clojure/clojurescript "1.9.89"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/core.async "0.2.385"]
                  ;[sablono "0.4.0"]
@@ -17,6 +17,7 @@
                  ;[datascript "0.13.1"] ; just to download
                  [figwheel-sidecar "0.5.0-SNAPSHOT" :scope "test"]
                  ]
+  :profiles {:dev {:dependencies [[org.clojure/test.check "0.9.0"]]}}
   :plugins [[lein-cljsbuild "1.1.3"]
             [lein-figwheel "0.5.4-3"] ; may require reversion to old version
             ;[figwheel-sidecar "0.5.0-SNAPSHOT" :scope "test"] ; just to download

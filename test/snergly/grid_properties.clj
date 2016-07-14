@@ -1,21 +1,19 @@
 (ns snergly.grid-properties
   (:require [clojure.test :refer :all]
-            [clojure.test.check :as tc]
-            [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.clojure-test :refer :all]
             [clojure.spec :as s]
+            [clojure.spec.gen :as sg]
             [clojure.spec.test :as st]
             [snergly.grid :as g]))
 
-(s/instrument-ns 'snergly.grid)
+(st/instrument 'snergly.grid)
 
-(def gen-dimen
-  (gen/fmap inc gen/s-pos-int))
+(def gen-dimen (s/gen ::g/grid-dimen))
 
 (def gen-dimen-and-coord
-  (gen/bind gen-dimen
-            (fn [dimen] (gen/tuple (gen/return dimen) (gen/choose 0 (dec dimen))))))
+  (sg/bind gen-dimen
+           (fn [dimen] (sg/tuple (sg/return dimen) (s/gen (s/int-in 0 dimen))))))
 
 (defn valid-coord?
   ([{:keys [rows cols]} [row col]] (valid-coord? rows cols row col))
