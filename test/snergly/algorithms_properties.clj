@@ -59,13 +59,13 @@
 ;; Utility and validation functions
 
 (defn grid-cells [g]
-  (map #(grid/grid-cell g %) (grid/grid-coords g)))
+  (map #(grid/grid-cell g %) (grid/grid-positions g)))
 
 (defn new-grid?
   [grid]
   (and (grid/new? grid)
        (every? empty?
-               (map #(::grid/links (grid/grid-cell grid %)) (grid/grid-coords grid)))))
+               (map #(::grid/links (grid/grid-cell grid %)) (grid/grid-positions grid)))))
 
 (defn has-cycle?
   ([grid] (has-cycle? grid [0 0]))
@@ -91,7 +91,7 @@
           (changed-cells [[a b]]
             {:pre [(and (= (::grid/rows a) (::grid/rows b))
                         (= (::grid/cols a) (::grid/cols b)))]}
-            (set (filter (partial cell-changed? a b) (grid/grid-coords a))))]
+            (set (filter (partial cell-changed? a b) (grid/grid-positions a))))]
     (map changed-cells (partition 2 1 grids))))
 
 ;; -----------------------------------------------------------------------------
@@ -116,7 +116,7 @@
              distances# (last (distances-seq final# [0 0]))
              ]
          (every? not-empty links#)                    ; quick check for no isolated cells
-         (every? #(contains? distances# %) (grid/grid-coords final#)) ; every cell reachable
+         (every? #(contains? distances# %) (grid/grid-positions final#)) ; every cell reachable
          (not (has-cycle? final#))                    ; no cycles
          ))))
 
@@ -128,7 +128,7 @@
        (let [updates# (all-updates (partial (algorithm-functions ~alg-name) grid#))
              change-sets# (filter identity (map ::grid/changed-cells updates#))
              changed-cells# (apply set/union change-sets#)]
-         (= (set (grid/grid-coords grid#)) changed-cells#)))))
+         (= (set (grid/grid-positions grid#)) changed-cells#)))))
 
 ;; Does each update link exactly two cells?
 (defmacro check-algorithm-updates-link-2 [alg-name]
@@ -194,7 +194,7 @@
           change-appearances (conj (apply concat change-sets) start-coord)
           change-counts (group-by identity change-appearances)]
       (every? #(= 1 (count %)) (vals change-counts))
-      (= (set (grid/grid-coords grid))
+      (= (set (grid/grid-positions grid))
          (set (keys change-counts))))))
 
 (defspec distances-seq-each-intermediate-changes
@@ -209,7 +209,7 @@
   10
   (prop/for-all [[maze start-coord] gen-maze-and-coord]
     (let [intermediates (all-updates #(distances-seq maze start-coord))
-          maxes (map ::grid/max intermediates)]
+          maxes (map ::grid/max-dist intermediates)]
       (every? #(= 1 %)
               (map (fn [[a b]] (- b a)) (partition 2 1 maxes))))))
 
@@ -218,7 +218,7 @@
          (prop/for-all [grid gen-grid]
                        (let [maze (final-update #((algorithm-functions "binary-tree") grid))
                              dist1 (last (distances-seq maze [0 0]))
-                             dist2 (last (distances-seq maze (::grid/max-coord dist1)))
-                             intermediates (all-updates #(path-seq maze dist2 (::grid/max-coord dist2)))
+                             dist2 (last (distances-seq maze (::grid/max-pos dist1)))
+                             intermediates (all-updates #(path-seq maze dist2 (::grid/max-pos dist2)))
                              change-sets (map ::grid/changed-cells intermediates)]
                          (every? not-empty change-sets))))

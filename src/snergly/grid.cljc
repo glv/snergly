@@ -16,8 +16,8 @@
 ;; * √ cell, r: (g/cell-neighbor cell :east)
 ;; * cell, r: (g/cell-links cell)
 ;; * chgs, r: (g/changed-cells thing)
-;; * dist, r: (g/max-distance distances)
-;; * dist, r: (g/max-coord distances)
+;; * dist, r: (g/max-dist distances)
+;; * dist, r: (g/max-pos distances)
 ;; * dist, r: (g/origin distances)
 ;;
 ;; For snergly.image:
@@ -39,21 +39,21 @@
 (declare make-cell)
 (s/def ::neighbor       (s/nilable ::cell-position))
 
-(s/def ::coord          ::cell-position)
+(s/def ::pos            ::cell-position)
 (s/def ::north          ::neighbor)
 (s/def ::south          ::neighbor)
 (s/def ::east           ::neighbor)
 (s/def ::west           ::neighbor)
 (s/def ::links          (s/coll-of ::cell-position :type set?))
 ;; What are the other validity constraints that *could* be specified here?
-;; * nsew should either be nil or distance 1 from coord
-;; * n should be nil only if (first coord) is 0
-;; * w should be nil only if (second coord) is 0
+;; * nsew should either be nil or distance 1 from pos
+;; * n should be nil only if (first pos) is 0
+;; * w should be nil only if (second pos) is 0
 ;; * validity of nil values for s and e depend on information outside the cell
 ;;   (the dimensions of the grid)
 ;; * values in links must be in nsew
 (s/def ::cell           (s/with-gen
-                          (s/keys :req [::coord
+                          (s/keys :req [::pos
                                         ::north ::south ::east ::west
                                         ::links])
                           (gen/fmap (fn [[rs cs]]
@@ -90,20 +90,20 @@
 
 ;; distances
 (s/def ::origin         ::cell-position)
-(s/def ::max            pos-int?)
-(s/def ::max-coord      ::cell-position)
+(s/def ::max-dist       pos-int?)
+(s/def ::max-pos        ::cell-position)
 (s/def ::dist-or-annot  (s/or :origin    (s/tuple #(= ::origin %)        ::cell-position)
-                              :max-coord (s/tuple #(= ::max-coord %)     ::cell-position)
-                              :max       (s/tuple #(= ::max %)           pos-int?)
+                              :max-pos   (s/tuple #(= ::max-pos %)       ::cell-position)
+                              :max-dist  (s/tuple #(= ::max-dist %)      pos-int?)
                               :changes   (s/tuple #(= ::changed-cells %) ::changed-cells)
                               :dist      (s/tuple ::cell-position pos-int?)))
 
-(s/def ::distances      (s/and (s/keys :req [::origin ::max] :opt [::max-coord])
+(s/def ::distances      (s/and (s/keys :req [::origin ::max-dist] :opt [::max-pos])
                                (s/coll-of ::dist-or-annot :type map?)))
 ;; I think if I write the right macro, I can replace ::dist-or-annot
 ;; and ::distances with this:
 ;;
-;; (s/def ::distance-annotations (s/keys :req [::origin ::max] :opt [::max-coord]))
+;; (s/def ::distance-annotations (s/keys :req [::origin ::max-dist] :opt [::max-pos]))
 ;; (s/def ::distances            (s/merged ::distance-annotations
 ;;                                         ::with-changes
 ;;                                         (s/map-of ::cell-position pos-int?)))
@@ -114,7 +114,7 @@
 ;; But here's what Alex and Rich are working on:
 ;;
 ;; (s/def ::distances (s/key-cond
-;;                      keyword? (s/keys :req [::origin ::max] :opt [::max-coord])
+;;                      keyword? (s/keys :req [::origin ::max-dist] :opt [::max-pos])
 ;;                      vector? (s/map-of ::cell-position pos-int?)))
 ;;
 ;; Much, much better!
@@ -127,13 +127,13 @@
                      #(< (:row %) (:rows %))
                      #(< (:col %) (:cols %)))
         :ret ::cell
-        :fn (s/and #(= (-> % :ret ::coord first) (-> % :args :row))
-                   #(= (-> % :ret ::coord second) (-> % :args :col))
+        :fn (s/and #(= (-> % :ret ::pos first)  (-> % :args :row))
+                   #(= (-> % :ret ::pos second) (-> % :args :col))
                    #(empty? (-> % :ret ::links))))
 
 (defn make-cell
   [row col rows cols]
-  {::coord [row col]
+  {::pos   [row col]
    ::north (when (> row 0) [(dec row) col])
    ::south (when (< row (dec rows)) [(inc row) col])
    ::east  (when (< col (dec cols)) [row (inc col)])
@@ -176,7 +176,7 @@
         :args (s/cat :grid ::grid :position ::cell-position)
         :ret pos-int?
         :fn #(= (-> % :args :position)
-                (::coord (get (-> % :args :grid ::cells) (-> % :ret)))))
+                (::pos (get (-> % :args :grid ::cells) (-> % :ret)))))
 
 (defn cell-index [grid [row col]]
   (+ (* row (::cols grid)) col))
@@ -189,12 +189,12 @@
 (defn grid-cell [grid [row col]]
   ((::cells grid) (cell-index grid [row col])))
 
-(s/fdef random-coord
+(s/fdef random-pos
         ;; figure out how to name the destructured part of :grid
         :args (s/cat :grid ::grid)
         :ret ::cell-position)
 
-(defn random-coord [{:keys [::rows ::cols] :as grid}]
+(defn random-pos [{:keys [::rows ::cols] :as grid}]
   (let [row (rand-int rows)
         col (rand-int cols)]
     [row col]))
@@ -207,24 +207,24 @@
 (defn grid-size [{:keys [::rows ::cols]}]
   (* rows cols))
 
-(s/fdef grid-row-coords
+(s/fdef grid-row-positions
         ;; figure out how to name the destructured part of :grid
         :args (s/cat :grid ::grid)
         ;; maybe this double-nesting could be made clearer by defining a
-        ;; separate predicate, maybe ::row-coords or something.
+        ;; separate predicate, maybe ::row-positions or something.
         :ret (s/coll-of (s/coll-of ::cell-position :type vector?) :type vector?))
 
-(defn grid-row-coords [{:keys [::rows ::cols]}]
-  "Grid cell coordinates, batched into rows."
+(defn grid-row-positions [{:keys [::rows ::cols]}]
+  "Grid cell positions, batched into rows."
   (for [row (range rows)]
     (for [col (range cols)]
       [row col])))
 
-(s/fdef grid-coords
+(s/fdef grid-positions
         :args (s/cat :grid ::grid)
         :ret (s/coll-of ::cell-position :type vector?))
 
-(defn grid-coords [{:keys [::rows ::cols]}]
+(defn grid-positions [{:keys [::rows ::cols]}]
   (for [row (range rows) col (range cols)]
     [row col]))
 
@@ -234,7 +234,7 @@
 
 (defn grid-deadends [grid]
   (filter #(= 1 (count (::links %)))
-          (map #(grid-cell grid %) (grid-coords grid))))
+          (map #(grid-cell grid %) (grid-positions grid))))
 
 (s/fdef begin-step
         :args (s/cat :thing ::with-changes)
@@ -260,27 +260,27 @@
 
 (s/fdef link-cells
         ;; figure out how to name the destructured parts
-        :args (s/cat :grid ::grid :cell ::cell :neighbor-coord ::cell-position)
+        :args (s/cat :grid ::grid :cell ::cell :neighbor-pos ::cell-position)
         :ret ::grid)
 
 (defn link-cells [{:keys [::cells ::changed-cells] :as grid}
-                  {cell-coord ::coord cell-links ::links :as cell}
-                  neighbor-coord]
-  (let [neighbor (grid-cell grid neighbor-coord)
+                  {cell-pos ::pos cell-links ::links :as cell}
+                  neighbor-pos]
+  (let [neighbor (grid-cell grid neighbor-pos)
         neighbor-links (::links neighbor)]
     (assoc grid ::cells
-                (assoc cells (cell-index grid cell-coord)
-                             (assoc cell ::links (conj cell-links neighbor-coord))
-                             (cell-index grid neighbor-coord)
-                             (assoc neighbor ::links (conj neighbor-links cell-coord)))
-                ::changed-cells (conj changed-cells cell-coord neighbor-coord))))
+                (assoc cells (cell-index grid cell-pos)
+                             (assoc cell ::links (conj cell-links neighbor-pos))
+                             (cell-index grid neighbor-pos)
+                             (assoc neighbor ::links (conj neighbor-links cell-pos)))
+                ::changed-cells (conj changed-cells cell-pos neighbor-pos))))
 
 (s/fdef linked?
-        :args (s/cat :cell ::cell :other-cell-coord ::cell-position)
+        :args (s/cat :cell ::cell :other-cell-pos ::cell-position)
         :ret boolean?)
 
-(defn linked? [cell other-cell-coord]
-  (contains? (::links cell) other-cell-coord))
+(defn linked? [cell other-cell-pos]
+  (contains? (::links cell) other-cell-pos))
 
 (s/fdef make-distances
         :args (s/cat :origin ::cell-position)
@@ -290,25 +290,25 @@
   "Creates and returns a new distances object with the supplied origin."
   [origin]
   {::origin        origin
-   ::max           0
+   ::max-dist      0
    origin          0
    ::changed-cells #{origin}})
 
 (s/fdef add-distances
         ;; figure out how to name destructured parts
         :args (s/cat :distances ::distances
-                     :coords (s/coll-of ::cell-position :type vector?)
+                     :positions (s/coll-of ::cell-position :type vector?)
                      :distance pos-int?)
         :ret ::distances)
 
 (defn add-distances [{:keys [::changed-cells] :as distances}
-                     coords
+                     positions
                      distance]
-  (let [new-max (max distance (::max distances))]
+  (let [new-max-dist (max distance (::max-dist distances))]
     (apply assoc distances
-           ::max new-max
-           ::changed-cells (apply conj (or changed-cells #{}) coords)
-           (mapcat #(vector % distance) coords))))
+           ::max-dist new-max-dist
+           ::changed-cells (apply conj (or changed-cells #{}) positions)
+           (mapcat #(vector % distance) positions))))
 
 (s/fdef xform-values
         :args (s/cat :value-xform (s/fspec :args (s/cat :val int?) :ret identity)
@@ -326,14 +326,14 @@
 (defn grid-annotate-cells [grid label-specs]
   (let [specs (seq label-specs)
         changed-cells (apply set/union (map (comp ::changed-cells second) specs))
-        cells-to-annotate (if changed-cells changed-cells (grid-coords grid))]
-    (letfn [(get-annotations [cell-coord [label value-map]] (vector label (value-map cell-coord)))
-            (assoc-cell [cell cell-coord]
-              (apply assoc cell (mapcat (partial get-annotations cell-coord) specs)))
-            (annotate-cell [grid cell-coord]
+        cells-to-annotate (if changed-cells changed-cells (grid-positions grid))]
+    (letfn [(get-annotations [cell-pos [label value-map]] (vector label (value-map cell-pos)))
+            (assoc-cell [cell cell-pos]
+              (apply assoc cell (mapcat (partial get-annotations cell-pos) specs)))
+            (annotate-cell [grid cell-pos]
               (update-in grid
-                         [::cells (cell-index grid cell-coord)]
-                         assoc-cell cell-coord))]
+                         [::cells (cell-index grid cell-pos)]
+                         assoc-cell cell-pos))]
       (assoc (reduce annotate-cell grid cells-to-annotate) ::changed-cells (set cells-to-annotate)))))
 
 (defn intlabel [val]
@@ -342,16 +342,16 @@
 
 (defn print-grid
   ([grid] (print-grid grid false))
-  ([{cols ::cols :as grid} print-coords?]
+  ([{cols ::cols :as grid} print-positions?]
    (let [resolve (partial grid-cell grid)]
-     (when print-coords?
+     (when print-positions?
        (println (apply str "   " (map #(str (intlabel %) "  ")) (range cols)))
        (print "  "))
      ;; top border
      (println (apply str "+" (repeat cols "---+")))
-     (doseq [row (grid-row-coords grid)]
+     (doseq [row (grid-row-positions grid)]
        ;; cell space line
-       (when print-coords?
+       (when print-positions?
          (print (intlabel (ffirst row))))
        (println (apply str "|"
                        (for [cell (map resolve row)]
@@ -362,7 +362,7 @@
                                 " "
                                 "|")))))
        ;; bottom separator line
-       (when print-coords? (print "  "))
+       (when print-positions? (print "  "))
        (println (apply str "+"
                        (for [cell (map resolve row)]
                          (str (if (linked? cell (::south cell))

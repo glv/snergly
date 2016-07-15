@@ -27,7 +27,7 @@
                          {:keys [start-row start-col] :as maze-params}
                          ui dist-key prev-dist-key]
   (let [prev-distances (when prev-dist-key (prev-dist-key r-state))
-        start (if prev-distances (::grid/max-coord prev-distances) [start-row start-col])
+        start (if prev-distances (::grid/max-pos prev-distances) [start-row start-col])
         new-r-state (assoc r-state ::i/status "Finding distances …")
         expected-max (* (grid/grid-size grid) 0.8)]
     (sequence (comp algs/updates-only
@@ -38,7 +38,7 @@
                     {:keys [end-row end-col] :as maze-params}
                     ui prev-dist-key longest?]
   (let [prev-distances (prev-dist-key r-state)
-        goal (if longest? (::grid/max-coord prev-distances) [end-row end-col])
+        goal (if longest? (::grid/max-pos prev-distances) [end-row end-col])
         message (str "Plotting path (" (inc (prev-distances goal)) " cells long) …")
         new-r-state (assoc r-state ::i/status message)]
     (sequence (comp algs/updates-only

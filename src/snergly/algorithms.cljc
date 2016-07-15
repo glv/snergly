@@ -54,7 +54,7 @@
         (cons next-grid (binary-tree-seq* (g/begin-step next-grid) coords))))))
 
 (defn binary-tree-seq [grid]
-  (binary-tree-seq* (g/begin-step (assoc grid ::g/algorithm-name "binary-tree")) (g/grid-coords grid)))
+  (binary-tree-seq* (g/begin-step (assoc grid ::g/algorithm-name "binary-tree")) (g/grid-positions grid)))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (g/cell-neighbor cell :east))
@@ -85,7 +85,7 @@
         (cons new-grid (sidewinder-seq* (g/begin-step new-grid) coords (conj processed-run (first coords))))))))
 
 (defn sidewinder-seq [grid]
-  (let [coords (g/grid-coords grid)]
+  (let [coords (g/grid-positions grid)]
     (sidewinder-seq* (g/begin-step (assoc grid ::g/algorithm-name "sidewinder")) coords [(first coords)])))
 
 (defn aldous-broder-seq* [grid current unvisited]
@@ -104,7 +104,7 @@
 
 (defn aldous-broder-seq [grid]
   (aldous-broder-seq* (g/begin-step (assoc grid ::g/algorithm-name "aldous-broder"))
-                      (g/random-coord grid)
+                      (g/random-pos grid)
                       (dec (g/grid-size grid))))
 
 (defn wilsons-loop-erased-walk [grid start-coord unvisited]
@@ -140,10 +140,10 @@
 
 (defn wilsons-seq [grid]
   (wilsons-seq* (g/begin-step (assoc grid ::g/algorithm-name "wilsons"))
-                (rest (shuffle (g/grid-coords grid)))))
+                (rest (shuffle (g/grid-positions grid)))))
 
 (defn hunt-and-kill-start-new-walk [grid]
-  (loop [[current-coord & other-coords] (g/grid-coords grid)]
+  (loop [[current-coord & other-coords] (g/grid-positions grid)]
     (let [current-cell (g/grid-cell grid current-coord)
           visited-neighbors (remove #(empty? (::g/links (g/grid-cell grid %))) (g/cell-neighbors current-cell))]
       (cond
@@ -170,7 +170,7 @@
               (hunt-and-kill-seq* (g/begin-step new-grid) next-coord))))))
 
 (defn hunt-and-kill-seq [grid]
-  (hunt-and-kill-seq* (g/begin-step (assoc grid ::g/algorithm-name "hunt-and-kill")) (g/random-coord grid)))
+  (hunt-and-kill-seq* (g/begin-step (assoc grid ::g/algorithm-name "hunt-and-kill")) (g/random-pos grid)))
 
 (defn recursive-backtracker-step [grid stack]
   (let [grid (g/begin-step grid)
@@ -192,7 +192,7 @@
         (cons new-grid (recursive-backtracker-seq* (g/begin-step new-grid) new-stack))))))
 
 (defn recursive-backtracker-seq [grid]
-  (recursive-backtracker-seq* (g/begin-step (assoc grid ::g/algorithm-name "recursive-backtracker")) (list (g/random-coord grid))))
+  (recursive-backtracker-seq* (g/begin-step (assoc grid ::g/algorithm-name "recursive-backtracker")) (list (g/random-pos grid))))
 
 ;; There are a couple of weird, sporadic rendering bugs that are hard to track
 ;; down because they only appear on some mazes.  This is a deterministic
@@ -211,7 +211,7 @@
       (cons next-grid (pessimal-seq* (g/begin-step next-grid) coords))))))
 
 (defn pessimal-seq [grid]
-  (pessimal-seq* (g/begin-step (assoc grid ::g/algorithm-name "pessimal")) (g/grid-coords grid)))
+  (pessimal-seq* (g/begin-step (assoc grid ::g/algorithm-name "pessimal")) (g/grid-positions grid)))
 
 ;; distances-seq advances on each iteration of Dijkstra's algorithm --- in
 ;; other words, for each cell that's on the current wavefront of the flood.
@@ -231,7 +231,7 @@
         ([result] (xf (xf result @prev)))
         ([result input]
          (let [prior @prev]
-           (if (and prior (> (::g/max input) (::g/max prior)))
+           (if (and prior (> (::g/max-dist input) (::g/max-dist prior)))
              (do
                (vreset! prev input)
                (xf result prior))
@@ -246,7 +246,7 @@
           links (remove #(contains? distances %) (::g/links cell))
           next-frontier (apply conj frontier links)]
       (if (empty? next-frontier)
-        (cons (assoc distances ::g/max-coord current) nil)
+        (cons (assoc distances ::g/max-pos current) nil)
         (let [new-distances (if (empty? links)
                               distances
                               (g/add-distances distances links (inc current-distance)))]
@@ -277,8 +277,8 @@
           breadcrumbs (assoc (g/add-distances (g/make-distances (::g/origin distances))
                                               [goal]
                                               goal-distance)
-                        ::g/max goal-distance
-                        ::g/max-coord goal)]
+                        ::g/max-dist goal-distance
+                        ::g/max-pos goal)]
       (cons breadcrumbs (path-seq* grid distances goal (g/begin-step breadcrumbs))))))
 
 ;; TODO: it would be easy for a bunch of inefficiency to hide in this
@@ -313,18 +313,18 @@
            analyze-path (fn [maze] (last (path-seq maze (analyze-distances maze) (:path-to options))))
            analyze-longest-path (fn [maze]
                                   (let [distances (last (distances-seq maze [0 0]))
-                                        distances-from-farthest (last (distances-seq maze (::g/max-coord distances)))]
-                                    (last (path-seq maze distances-from-farthest (::g/max-coord distances-from-farthest)))))
+                                        distances-from-farthest (last (distances-seq maze (::g/max-pos distances)))]
+                                    (last (path-seq maze distances-from-farthest (::g/max-pos distances-from-farthest)))))
            analyze (cond
                      (:longest options) analyze-longest-path
                      (:path-to options) analyze-path
                      (:distances options) analyze-distances
                      :else (fn [_] {}))]
        (fn [grid]
-         (let [maze (assoc (algorithm grid) ::g/changed-cells (into #{} (g/grid-coords grid)))
+         (let [maze (assoc (algorithm grid) ::g/changed-cells (into #{} (g/grid-positions grid)))
                analysis (analyze maze)
                analysis (assoc analysis ::g/changed-cells (into #{} (filter vector? (keys analysis))))]
            (g/grid-annotate-cells maze
                                   {:label (g/xform-values util/base36 analysis)
-                                   :color (g/xform-values #(util/make-color (::g/max analysis) %) analysis)})))))
+                                   :color (g/xform-values #(util/make-color (::g/max-dist analysis) %) analysis)})))))
    )

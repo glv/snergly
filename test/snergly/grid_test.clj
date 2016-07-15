@@ -10,31 +10,31 @@
   (testing "middle cell"
     (let [cell (g/make-cell 3 5 10 15)]
       (are [expected key] (= expected (key cell))
-        [3 5] ::g/coord
-        [2 5] ::g/north
-        [4 5] ::g/south
-        [3 6] ::g/east
-        [3 4] ::g/west
-        #{}   ::g/links)))
+                          [3 5] ::g/pos
+                          [2 5] ::g/north
+                          [4 5] ::g/south
+                          [3 6] ::g/east
+                          [3 4] ::g/west
+                          #{} ::g/links)))
   (testing "north border cell"
     (let [cell (g/make-cell 0 5 10 15)]
       (are [expected key] (= expected (key cell))
-        [0 5] ::g/coord
-        nil   ::g/north
-        [1 5] ::g/south
-        [0 6] ::g/east
-        [0 4] ::g/west)))
+                          [0 5] ::g/pos
+                          nil ::g/north
+                          [1 5] ::g/south
+                          [0 6] ::g/east
+                          [0 4] ::g/west)))
   (testing "south border cell"
     (let [cell (g/make-cell 9 5 10 15)]
-      (is (= [9 5] (::g/coord cell)))
+      (is (= [9 5] (::g/pos cell)))
       (is (nil? (::g/south cell)))))
   (testing "east border cell"
     (let [cell (g/make-cell 3 14 10 15)]
-      (is (= [3 14] (::g/coord cell)))
+      (is (= [3 14] (::g/pos cell)))
       (is (nil? (::g/east cell)))))
   (testing "west border cell"
     (let [cell (g/make-cell 3 0 10 15)]
-      (is (= [3 0] (::g/coord cell)))
+      (is (= [3 0] (::g/pos cell)))
       (is (nil? (::g/west cell))))))
 
 (deftest t-cell-neighbors
@@ -66,9 +66,9 @@
     (is (= (g/make-cell 2 3 3 5)
            (g/grid-cell grid3x5 [2 3])))))
 
-(deftest t-grid-row-coords
+(deftest t-grid-row-positions
   (let [grid3x5 (g/make-grid 3 5)
-        rowseq (g/grid-row-coords grid3x5)]
+        rowseq (g/grid-row-positions grid3x5)]
     (is (seq? rowseq))
     (is (= 3 (count rowseq)))
     (doseq [row rowseq]

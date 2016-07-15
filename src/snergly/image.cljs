@@ -29,10 +29,10 @@
                                     ::color-family-path]))
 (s/def ::distances (s/and ::g/distances))
 (s/def ::color-family ::color-family)
-(s/def ::expected-max-distance int?)
+(s/def ::expected-max-dist int?)
 (s/def ::distance-map (s/keys :req [::distances
                                     ::color-family
-                                    ::expected-max-distance]))
+                                    ::expected-max-dist]))
 (s/def ::path-map (s/keys :req [::distances
                                 ::color-family]))
 
@@ -88,21 +88,21 @@
                              background
                              distance-maps
                              changed-cells]
-  (doseq [coord changed-cells]
-    (let [{:keys [::distances ::color-family ::expected-max-distance] :as distance-map} (first (filter #(contains? (::distances %) coord) distance-maps))
-          [y x] (map #(* % cell-size) coord)
-          cell (g/grid-cell grid coord)
+  (doseq [pos changed-cells]
+    (let [{:keys [::distances ::color-family ::expected-max-dist] :as distance-map} (first (filter #(contains? (::distances %) pos) distance-maps))
+          [y x] (map #(* % cell-size) pos)
+          cell (g/grid-cell grid pos)
           x (if (g/linked? cell (::g/west cell)) (- x 0.5) x)
           y (if (g/linked? cell (::g/north cell)) (- y 0.5) y)
           w (if (g/linked? cell (::g/east cell)) (+ cell-size 0.5) cell-size)
           h (if (g/linked? cell (::g/south cell)) (+ cell-size 0.5) cell-size)
-          ;; Ignore max-distance until optimized rendering is completely working.
+          ;; Ignore max-dist until optimized rendering is completely working.
           ;; Right now, this causes a distracting sudden darkening of the colors
           ;; at the end of each distances pass.
-          ;; max-distance (if (:max-coord distances) (:max distances) expected-max-distance)
-          max-distance (::g/max distances)
+          ;; max-dist (if (:max-pos distances) (:max-dist distances) expected-max-dist)
+          max-dist (::g/max-dist distances)
           color (if distance-map
-                  (util/make-color max-distance (distances coord) color-family)
+                  (util/make-color max-dist (distances pos) color-family)
                   background)]
       (fill-rect g color x y w h))))
 
@@ -115,18 +115,18 @@
                        cell-size
                        wall
                        changed-cells]
-  (doseq [coord changed-cells]
-    (let [[y1 x1] (map #(* % cell-size) coord)
+  (doseq [pos changed-cells]
+    (let [[y1 x1] (map #(* % cell-size) pos)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
-          cell (g/grid-cell grid coord)]
+          cell (g/grid-cell grid pos)]
       (when-not (::g/north cell) (draw-line g wall x1 y1 x2 y1))
       (when-not (::g/west cell) (draw-line g wall x1 y1 x1 y2))
 
       (when-not (g/linked? cell (::g/east cell)) (draw-line g wall x2 y1 x2 y2))
       (when-not (g/linked? cell (::g/south cell)) (draw-line g wall x1 y2 x2 y2)))))
 
-(defn center [coord cell-size]
-  (map #(+ (* % cell-size) (/ cell-size 2)) (reverse coord)))
+(defn center [pos cell-size]
+  (map #(+ (* % cell-size) (/ cell-size 2)) (reverse pos)))
 
 (s/fdef draw-path
         :args (s/cat :g identity :cell-size ::g/non-negative?
@@ -139,8 +139,8 @@
   ;(println (str "Would draw path for " (count changed-cells) " cells."))
   (let [path-distances (::distances path-map)
         color (util/make-color 1 1 (::color-family path-map))
-        inverted-path-map (set/map-invert (dissoc path-distances ::g/max))
-        path-cells (take-while (complement nil?) (map inverted-path-map (range (::g/max path-distances) -1 -1)))
+        inverted-path-map (set/map-invert (dissoc path-distances ::g/max-dist))
+        path-cells (take-while (complement nil?) (map inverted-path-map (range (::g/max-dist path-distances) -1 -1)))
         move-to (fn [g [x y]] (.moveTo g x y))
         line-to (fn [g [x y]] (.lineTo g x y))]
     (aset g "strokeStyle" "#f00")
@@ -164,11 +164,11 @@
                   wall
                   distance-maps
                   path-map]
-  (let [changed-cells (or (when-not optimize-drawing (set (g/grid-coords grid)))
+  (let [changed-cells (or (when-not optimize-drawing (set (g/grid-positions grid)))
                           (when path-map (::g/changed-cells (::distances path-map)))
                           (first (map (comp ::g/changed-cells ::distances) distance-maps))
                           (::g/changed-cells grid)
-                          (set (g/grid-coords grid)))]
+                          (set (g/grid-positions grid)))]
     (draw-cell-backgrounds g grid cell-size background distance-maps changed-cells)
     (draw-cell-walls g grid cell-size wall changed-cells)
     (when path-map (draw-path g cell-size path-map changed-cells))
@@ -193,8 +193,8 @@
         ;; going to leave them here to contain the ripple effects from changing
         ;; to the RenderState objects.
         dist-specs (remove #(nil? (::distances %))
-                           [{::distances dist-2 ::color-family color-family-2 ::expected-max-distance (g/grid-size grid)}
-                            {::distances dist-1 ::color-family color-family-1 ::expected-max-distance (g/grid-size grid)}])
+                           [{::distances dist-2 ::color-family color-family-2 ::expected-max-dist (g/grid-size grid)}
+                            {::distances dist-1 ::color-family color-family-1 ::expected-max-dist (g/grid-size grid)}])
         path-spec (when path {::distances path ::color-family color-family-path})
         ;; if we aren't optimizing drawing, discard optimization information
         ;grid (if *optimize-drawing* grid (assoc grid :changed-cells nil))

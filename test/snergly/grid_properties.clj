@@ -15,9 +15,9 @@
   (sg/bind gen-dimen
            (fn [dimen] (sg/tuple (sg/return dimen) (s/gen (s/int-in 0 dimen))))))
 
-(defn valid-coord?
-  ([{:keys [rows cols]} [row col]] (valid-coord? rows cols row col))
-  ([rows cols [row col]] (valid-coord? rows cols row col))
+(defn valid-pos?
+  ([{:keys [rows cols]} [row col]] (valid-pos? rows cols row col))
+  ([rows cols [row col]] (valid-pos? rows cols row col))
   ([rows cols row col]
    (and (>= row 0)
         (< row rows)
@@ -29,7 +29,7 @@
   (prop/for-all [[rows row] gen-dimen-and-coord
                  [cols col] gen-dimen-and-coord]
     (let [cell (g/make-cell row col rows cols)]
-      (valid-coord? rows cols (::g/coord cell)))))
+      (valid-pos? rows cols (::g/pos cell)))))
 
 (defspec cell-knows-about-neighbors
   50
@@ -65,7 +65,7 @@
            (neighbor-test (> col 0) row (dec col))
            (neighbor-test (< col (dec cols)) row (inc col))))))
 
-(defspec grids-are-well-formed
+(defspec grid-is-well-formed
   30
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
@@ -74,26 +74,26 @@
            (= cols (::g/cols grid))
            (= (* rows cols) (count (::g/cells grid)))))))
 
-(defspec random-coords-are-within-grid
+(defspec random-pos-is-within-grid
   100
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
     (let [grid (g/make-grid rows cols)
-          [row col] (g/random-coord grid)]
-      (valid-coord? rows cols row col))))
+          [row col] (g/random-pos grid)]
+      (valid-pos? rows cols row col))))
 
-(defspec grid-row-coords-for-each-cell
+(defspec grid-row-positions-includes-all-cells
   10
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
     (let [grid (g/make-grid rows cols)]
       (= (g/grid-size grid)
-         (count (apply concat (g/grid-row-coords grid)))))))
+         (count (apply concat (g/grid-row-positions grid)))))))
 
-(defspec grid-coords-for-each-cell
+(defspec grid-positions-includes-all-cells
   10
   (prop/for-all [rows gen-dimen
                  cols gen-dimen]
     (let [grid (g/make-grid rows cols)]
       (= (g/grid-size grid)
-         (count (g/grid-coords grid))))))
+         (count (g/grid-positions grid))))))

@@ -6,7 +6,7 @@
 ;; TODO: update this to work like the cljs version and use a RenderState
 ;; object and not require annotating the cells.
 (defn draw-cells [^Graphics2D g grid cell-size draw-fn]
-  (doseq [coord (grid-coords grid)]
+  (doseq [coord (grid-positions grid)]
     (let [[y1 x1] (map #(* % cell-size) coord)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
           cell (grid-cell grid coord)]
