@@ -27,8 +27,7 @@
                                     ::color-family-2
                                     ::path
                                     ::color-family-path]))
-(s/def ::distances (s/and ::g/distances))
-(s/def ::color-family ::color-family)
+(s/def ::distances ::g/distances)
 (s/def ::expected-max-dist int?)
 (s/def ::distance-map (s/keys :req [::distances
                                     ::color-family

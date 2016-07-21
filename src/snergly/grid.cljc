@@ -129,6 +129,51 @@
         :ret ::cell
         :fn (s/and #(= (-> % :ret ::pos first)  (-> % :args :row))
                    #(= (-> % :ret ::pos second) (-> % :args :col))
+                   ;; The commented-out portion is what would be required to
+                   ;; specify *all* of the properties we can assert about
+                   ;; make-cell.  I don't think this is useless at all ... I
+                   ;; already had them specified in a test.check property-based
+                   ;; test.  But I have two problems with this approach:
+                   ;;
+                   ;; 1. For purposes of documentation, this is just too much.
+                   ;;    It's nice that specs can do double-duty, but even if
+                   ;;    these properties needed to be documented (and in my
+                   ;;    opinion they don't; they're clearly implied by the
+                   ;;    meaning and function of the data structure and the
+                   ;;    names of the fields.
+                   ;; 2. If a clause in such a complex property definition
+                   ;;    fails, it will be super confusing. One thing I liked
+                   ;;    in test.check is that I could code small, focused
+                   ;;    property tests with names, so that when one failed, I
+                   ;;    knew immediately what property didn't happen. (I would
+                   ;;    then have to look at the data to try to understand
+                   ;;    exactly how it failed, and then why ... but it was
+                   ;;    still helpful to know immediately "Oh, that algorithm
+                   ;;    had a step that didn't change any cells" or whatever.
+                   ;;
+                   ;; It would be nice if spec allowed multiple different :fn
+                   ;; clauses, so that I could gain information from knowing
+                   ;; which one failed.
+                   ;;
+                   ;; This property could be specified as part of the `::cell`
+                   ;; predicate *if* the cell contained `rows` and `cols`. That
+                   ;; would be redundant ... but on the other hand, then the
+                   ;; `::north`, `::south`, etc fields could go away and be
+                   ;; replaced by functions that calculate them each time.
+                   ;; So it would essentially be reclaiming some space in each
+                   ;; cell and trading that for increased computation. (And I've
+                   ;; already got the function wrappers now, so I could just
+                   ;; change their implementations and it'd be done.)
+                   ;;
+                   ;; #(let [[r c] (-> % :ret ::pos)
+                   ;;        rs (-> % :args :rows)
+                   ;;        cs (-> % :args :cols)
+                   ;;        cell (-> % :ret)]
+                   ;;   (and (if (> r 0) (= (::north cell) [(dec r) c]) (nil? (::north cell)))
+                   ;;        (if (< r (dec rs)) (= (::south cell) [(inc r) c]) (nil? (::south cell)))
+                   ;;        (if (> c 0) (= (::west cell) [r (dec c)]) (nil? (::west cell)))
+                   ;;        (if (< c (dec cs)) (= (::east cell) [r (inc c)]) (nil? (::east cell)))
+                   ;;        ))
                    #(empty? (-> % :ret ::links))))
 
 (defn make-cell
