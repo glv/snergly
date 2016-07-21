@@ -205,7 +205,7 @@
             next-grid (cond
                         (g/cell-neighbor cell :east) (g/link-cells grid cell (g/cell-neighbor cell :east))
                         (and (odd? row) (g/cell-neighbor cell :south)) (let [first-on-row (g/grid-cell grid [row 0])]
-                                                          (g/link-cells grid first-on-row (::g/south first-on-row)))
+                                                          (g/link-cells grid first-on-row (g/cell-neighbor first-on-row :south)))
                         (and (even? row) (g/cell-neighbor cell :south)) (g/link-cells grid cell (g/cell-neighbor cell :south))
                         :else grid)]
       (cons next-grid (pessimal-seq* (g/begin-step next-grid) coords))))))

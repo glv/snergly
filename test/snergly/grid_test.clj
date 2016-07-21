@@ -7,35 +7,35 @@
 (st/instrument 'snergly.grid)
 
 (deftest t-make-cell
-  (testing "middle cell"
+  (is (= {::g/pos [3 5]
+          ::g/max-pos [9 14]
+          ::g/links #{}}
+         (g/make-cell 3 5 10 15))))
+
+(deftest t-cell-neighbor
+  (testing "middle-cell"
     (let [cell (g/make-cell 3 5 10 15)]
-      (are [expected key] (= expected (key cell))
-                          [3 5] ::g/pos
-                          [2 5] ::g/north
-                          [4 5] ::g/south
-                          [3 6] ::g/east
-                          [3 4] ::g/west
-                          #{} ::g/links)))
+      (are [expected dir] (= expected (g/cell-neighbor cell dir))
+                          [2 5] :north
+                          [4 5] :south
+                          [3 6] :east
+                          [3 4] :west)))
   (testing "north border cell"
     (let [cell (g/make-cell 0 5 10 15)]
-      (are [expected key] (= expected (key cell))
-                          [0 5] ::g/pos
-                          nil ::g/north
-                          [1 5] ::g/south
-                          [0 6] ::g/east
-                          [0 4] ::g/west)))
+      (are [expected dir] (= expected (g/cell-neighbor cell dir))
+                          nil   :north
+                          [1 5] :south
+                          [0 6] :east
+                          [0 4] :west)))
   (testing "south border cell"
     (let [cell (g/make-cell 9 5 10 15)]
-      (is (= [9 5] (::g/pos cell)))
-      (is (nil? (::g/south cell)))))
+      (is (nil? (g/cell-neighbor cell :south)))))
   (testing "east border cell"
     (let [cell (g/make-cell 3 14 10 15)]
-      (is (= [3 14] (::g/pos cell)))
-      (is (nil? (::g/east cell)))))
+      (is (nil? (g/cell-neighbor cell :east)))))
   (testing "west border cell"
     (let [cell (g/make-cell 3 0 10 15)]
-      (is (= [3 0] (::g/pos cell)))
-      (is (nil? (::g/west cell))))))
+      (is (nil? (g/cell-neighbor cell :west))))))
 
 (deftest t-cell-neighbors
   (let [cell (g/make-cell 1 0 2 3)]

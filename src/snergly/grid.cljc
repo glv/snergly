@@ -29,33 +29,25 @@
 ;;
 
 ;; basic type constraints
-(s/def ::cell-coord     pos-int?)
+(s/def ::cell-coord     (s/with-gen pos-int? #(s/gen (s/int-in 0 24))))
 (s/def ::cell-position  (s/tuple ::cell-coord ::cell-coord))
 ;; restrict grid sizes for testing, but allow larger grids in production.
 (s/def ::grid-dimen     (s/with-gen (s/and integer? #(>= % 2))
                                     #(s/gen (s/int-in 2 25))))
 
 ;; cell
-(declare make-cell)
+(declare make-cell cell-neighbors)
 (s/def ::neighbor       (s/nilable ::cell-position))
 
 (s/def ::pos            ::cell-position)
-(s/def ::north          ::neighbor)
-(s/def ::south          ::neighbor)
-(s/def ::east           ::neighbor)
-(s/def ::west           ::neighbor)
+(s/def ::max-pos        ::cell-position)
 (s/def ::links          (s/coll-of ::cell-position :type set?))
-;; What are the other validity constraints that *could* be specified here?
-;; * nsew should either be nil or distance 1 from pos
-;; * n should be nil only if (first pos) is 0
-;; * w should be nil only if (second pos) is 0
-;; * validity of nil values for s and e depend on information outside the cell
-;;   (the dimensions of the grid)
-;; * values in links must be in nsew
 (s/def ::cell           (s/with-gen
-                          (s/keys :req [::pos
-                                        ::north ::south ::east ::west
-                                        ::links])
+                          (s/and
+                            (s/keys :req [::pos ::max-pos ::links])
+                            #(<= (first (::pos %)) (first (::max-pos %)))
+                            #(<= (second (::pos %)) (second (::max-pos %)))
+                            #(set/subset? (::links %) (set (cell-neighbors %))))
                           (gen/fmap (fn [[rs cs]]
                                       (let [r (rand-int rs)
                                             c (rand-int cs)]
@@ -73,17 +65,18 @@
 (s/def ::algorithm-name string?)
 (s/def ::rows           ::grid-dimen)
 (s/def ::cols           ::grid-dimen)
-(s/def ::cells          (s/coll-of ::cell :type vector?))
+(s/def ::cells          (s/every ::cell :kind vector?))
 ;; What are the other validity constraints that *could* be specified here?
-;; * number of cells == (rows+1) * (cols+1)
 ;; * one cell for each [row, col] permutation
 ;; * cells are in row-major order
-;; * cells with row == (rows-1) have e nil
-;; * cells woth col == (cols-1) have s nil
+;; * cells all have proper ::max-pos
 (s/def ::grid           (s/with-gen
-                          (s/keys :req [::algorithm-name
-                                        ::rows ::cols
-                                        ::cells])
+                          (s/and
+                            (s/keys :req [::algorithm-name
+                                          ::rows ::cols
+                                          ::cells])
+                            #(= (* (::rows %) (::cols %)) (count (::cells %)))
+                            )
                           (gen/fmap (fn [[rs cs]] (make-grid rs cs))
                                     (let [dgen (s/gen ::grid-dimen)]
                                       (gen/tuple dgen dgen)))))
@@ -91,7 +84,6 @@
 ;; distances
 (s/def ::origin         ::cell-position)
 (s/def ::max-dist       pos-int?)
-(s/def ::max-pos        ::cell-position)
 (s/def ::dist-or-annot  (s/or :origin    (s/tuple #(= ::origin %)        ::cell-position)
                               :max-pos   (s/tuple #(= ::max-pos %)       ::cell-position)
                               :max-dist  (s/tuple #(= ::max-dist %)      pos-int?)
@@ -129,60 +121,14 @@
         :ret ::cell
         :fn (s/and #(= (-> % :ret ::pos first)  (-> % :args :row))
                    #(= (-> % :ret ::pos second) (-> % :args :col))
-                   ;; The commented-out portion is what would be required to
-                   ;; specify *all* of the properties we can assert about
-                   ;; make-cell.  I don't think this is useless at all ... I
-                   ;; already had them specified in a test.check property-based
-                   ;; test.  But I have two problems with this approach:
-                   ;;
-                   ;; 1. For purposes of documentation, this is just too much.
-                   ;;    It's nice that specs can do double-duty, but even if
-                   ;;    these properties needed to be documented (and in my
-                   ;;    opinion they don't; they're clearly implied by the
-                   ;;    meaning and function of the data structure and the
-                   ;;    names of the fields.
-                   ;; 2. If a clause in such a complex property definition
-                   ;;    fails, it will be super confusing. One thing I liked
-                   ;;    in test.check is that I could code small, focused
-                   ;;    property tests with names, so that when one failed, I
-                   ;;    knew immediately what property didn't happen. (I would
-                   ;;    then have to look at the data to try to understand
-                   ;;    exactly how it failed, and then why ... but it was
-                   ;;    still helpful to know immediately "Oh, that algorithm
-                   ;;    had a step that didn't change any cells" or whatever.
-                   ;;
-                   ;; It would be nice if spec allowed multiple different :fn
-                   ;; clauses, so that I could gain information from knowing
-                   ;; which one failed.
-                   ;;
-                   ;; This property could be specified as part of the `::cell`
-                   ;; predicate *if* the cell contained `rows` and `cols`. That
-                   ;; would be redundant ... but on the other hand, then the
-                   ;; `::north`, `::south`, etc fields could go away and be
-                   ;; replaced by functions that calculate them each time.
-                   ;; So it would essentially be reclaiming some space in each
-                   ;; cell and trading that for increased computation. (And I've
-                   ;; already got the function wrappers now, so I could just
-                   ;; change their implementations and it'd be done.)
-                   ;;
-                   ;; #(let [[r c] (-> % :ret ::pos)
-                   ;;        rs (-> % :args :rows)
-                   ;;        cs (-> % :args :cols)
-                   ;;        cell (-> % :ret)]
-                   ;;   (and (if (> r 0) (= (::north cell) [(dec r) c]) (nil? (::north cell)))
-                   ;;        (if (< r (dec rs)) (= (::south cell) [(inc r) c]) (nil? (::south cell)))
-                   ;;        (if (> c 0) (= (::west cell) [r (dec c)]) (nil? (::west cell)))
-                   ;;        (if (< c (dec cs)) (= (::east cell) [r (inc c)]) (nil? (::east cell)))
-                   ;;        ))
+                   #(= (-> % :ret ::max-pos first) (dec (-> % :args :rows)))
+                   #(= (-> % :ret ::max-pos second) (dec (-> % :args :cols)))
                    #(empty? (-> % :ret ::links))))
 
 (defn make-cell
   [row col rows cols]
   {::pos   [row col]
-   ::north (when (> row 0) [(dec row) col])
-   ::south (when (< row (dec rows)) [(inc row) col])
-   ::east  (when (< col (dec cols)) [row (inc col)])
-   ::west  (when (> col 0) [row (dec col)])
+   ::max-pos [(dec rows) (dec cols)]
    ::links #{}})
 
 (s/fdef cell-neighbor
@@ -190,7 +136,13 @@
         :ret (s/nilable ::cell-position))
 
 (defn cell-neighbor [cell direction]
-  (cell (keyword "snergly.grid" (name direction))))
+  (let [[row col] (::pos cell)
+        [mrow mcol] (::max-pos cell)]
+    (case direction
+      :north (when (> row 0) [(dec row) col])
+      :west  (when (> col 0) [row (dec col)])
+      :south (when (< row mrow) [(inc row) col])
+      :east  (when (< col mcol) [row (inc col)]))))
 
 (s/fdef cell-neighbors
         :args (s/cat :cell ::cell
@@ -217,7 +169,6 @@
    ::changed-cells  nil})
 
 (s/fdef cell-index
-        ;; figure out how to name the destructured parts of :position
         :args (s/cat :grid ::grid :position ::cell-position)
         :ret pos-int?
         :fn #(= (-> % :args :position)
@@ -227,7 +178,6 @@
   (+ (* row (::cols grid)) col))
 
 (s/fdef grid-cell
-        ;; figure out how to name the destructured parts of :position
         :args (s/cat :grid ::grid :position ::cell-position)
         :ret ::cell)
 
@@ -235,7 +185,6 @@
   ((::cells grid) (cell-index grid [row col])))
 
 (s/fdef random-pos
-        ;; figure out how to name the destructured part of :grid
         :args (s/cat :grid ::grid)
         :ret ::cell-position)
 
@@ -245,7 +194,6 @@
     [row col]))
 
 (s/fdef grid-size
-        ;; figure out how to name the destructured part of :grid
         :args (s/cat :grid ::grid)
         :ret pos-int?)
 
@@ -253,11 +201,10 @@
   (* rows cols))
 
 (s/fdef grid-row-positions
-        ;; figure out how to name the destructured part of :grid
         :args (s/cat :grid ::grid)
         ;; maybe this double-nesting could be made clearer by defining a
         ;; separate predicate, maybe ::row-positions or something.
-        :ret (s/coll-of (s/coll-of ::cell-position :type vector?) :type vector?))
+        :ret (s/every (s/every ::cell-position :kind vector?) :kind vector?))
 
 (defn grid-row-positions [{:keys [::rows ::cols]}]
   "Grid cell positions, batched into rows."
@@ -304,7 +251,6 @@
   (boolean (not-empty (::changed-cells thing))))
 
 (s/fdef link-cells
-        ;; figure out how to name the destructured parts
         :args (s/cat :grid ::grid :cell ::cell :neighbor-pos ::cell-position)
         :ret ::grid)
 
@@ -340,7 +286,6 @@
    ::changed-cells #{origin}})
 
 (s/fdef add-distances
-        ;; figure out how to name destructured parts
         :args (s/cat :distances ::distances
                      :positions (s/coll-of ::cell-position :type vector?)
                      :distance pos-int?)
@@ -403,13 +348,13 @@
                          (str (if (::label cell)
                                 (str " " (::label cell) " ")
                                 "   ")
-                              (if (linked? cell (::east cell))
+                              (if (linked? cell (cell-neighbor cell :east))
                                 " "
                                 "|")))))
        ;; bottom separator line
        (when print-positions? (print "  "))
        (println (apply str "+"
                        (for [cell (map resolve row)]
-                         (str (if (linked? cell (::south cell))
+                         (str (if (linked? cell (cell-neighbor cell :south))
                                 "   "
                                 "---") "+"))))))))

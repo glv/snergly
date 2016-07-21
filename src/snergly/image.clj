@@ -19,11 +19,11 @@
       (.fillRect g x1 y1 cell-size cell-size))))
 
 (defn draw-cell-walls [^Graphics2D g cell _ x1 y1 x2 y2]
-  (when-not (:north cell) (.drawLine g x1 y1 x2 y1))
-  (when-not (:west cell) (.drawLine g x1 y1 x1 y2))
+  (when-not (cell-neighbor cell :north) (.drawLine g x1 y1 x2 y1))
+  (when-not (cell-neighbor cell :west) (.drawLine g x1 y1 x1 y2))
 
-  (when-not (linked? cell (:east cell)) (.drawLine g x2 y1 x2 y2))
-  (when-not (linked? cell (:south cell)) (.drawLine g x1 y2 x2 y2)))
+  (when-not (linked? cell (cell-neighbor cell :east)) (.drawLine g x2 y1 x2 y2))
+  (when-not (linked? cell (cell-neighbor cell :south)) (.drawLine g x1 y2 x2 y2)))
 
 (defn image-grid [{:keys [rows cols] :as grid} cell-size]
   (let [img-width (inc (* cell-size cols))

@@ -37,17 +37,17 @@
                  [cols col] gen-dimen-and-coord]
     (let [cell (g/make-cell row col rows cols)]
       (and (if (> row 0)
-             (= (::g/north cell) [(dec row) col])
-             (nil? (::g/north cell)))
+             (= (g/cell-neighbor cell :north) [(dec row) col])
+             (nil? (g/cell-neighbor cell :north)))
            (if (< row (dec rows))
-             (= (::g/south cell) [(inc row) col])
-             (nil? (::g/south cell)))
+             (= (g/cell-neighbor cell :south) [(inc row) col])
+             (nil? (g/cell-neighbor cell :south)))
            (if (> col 0)
-             (= (::g/west cell) [row (dec col)])
-             (nil? (::g/west cell)))
+             (= (g/cell-neighbor cell :west) [row (dec col)])
+             (nil? (g/cell-neighbor cell :west)))
            (if (< col (dec cols))
-             (= (::g/east cell) [row (inc col)])
-             (nil? (::g/east cell)))))))
+             (= (g/cell-neighbor cell :east) [row (inc col)])
+             (nil? (g/cell-neighbor cell :east)))))))
 
 (defspec cell-neighbors-returns-all-neighbors
   100

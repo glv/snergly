@@ -91,10 +91,10 @@
     (let [{:keys [::distances ::color-family ::expected-max-dist] :as distance-map} (first (filter #(contains? (::distances %) pos) distance-maps))
           [y x] (map #(* % cell-size) pos)
           cell (g/grid-cell grid pos)
-          x (if (g/linked? cell (::g/west cell)) (- x 0.5) x)
-          y (if (g/linked? cell (::g/north cell)) (- y 0.5) y)
-          w (if (g/linked? cell (::g/east cell)) (+ cell-size 0.5) cell-size)
-          h (if (g/linked? cell (::g/south cell)) (+ cell-size 0.5) cell-size)
+          x (if (g/linked? cell (g/cell-neighbor cell :west)) (- x 0.5) x)
+          y (if (g/linked? cell (g/cell-neighbor cell :north)) (- y 0.5) y)
+          w (if (g/linked? cell (g/cell-neighbor cell :east)) (+ cell-size 0.5) cell-size)
+          h (if (g/linked? cell (g/cell-neighbor cell :south)) (+ cell-size 0.5) cell-size)
           ;; Ignore max-dist until optimized rendering is completely working.
           ;; Right now, this causes a distracting sudden darkening of the colors
           ;; at the end of each distances pass.
@@ -118,11 +118,11 @@
     (let [[y1 x1] (map #(* % cell-size) pos)
           [y2 x2] (map #(+ % cell-size) [y1 x1])
           cell (g/grid-cell grid pos)]
-      (when-not (::g/north cell) (draw-line g wall x1 y1 x2 y1))
-      (when-not (::g/west cell) (draw-line g wall x1 y1 x1 y2))
+      (when-not (g/cell-neighbor cell :north) (draw-line g wall x1 y1 x2 y1))
+      (when-not (g/cell-neighbor cell :west) (draw-line g wall x1 y1 x1 y2))
 
-      (when-not (g/linked? cell (::g/east cell)) (draw-line g wall x2 y1 x2 y2))
-      (when-not (g/linked? cell (::g/south cell)) (draw-line g wall x1 y2 x2 y2)))))
+      (when-not (g/linked? cell (g/cell-neighbor cell :east)) (draw-line g wall x2 y1 x2 y2))
+      (when-not (g/linked? cell (g/cell-neighbor cell :south)) (draw-line g wall x1 y2 x2 y2)))))
 
 (defn center [pos cell-size]
   (map #(+ (* % cell-size) (/ cell-size 2)) (reverse pos)))
