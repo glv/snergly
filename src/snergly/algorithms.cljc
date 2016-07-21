@@ -1,12 +1,14 @@
 (ns snergly.algorithms
   #?(:clj (:import  [clojure.lang PersistentQueue]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
-  (:require #?(:clj [clojure.core.async :as async :refer [go go-loop]]
+  (:require #?(:clj [clojure.spec :as s]
+               :cljs [cljs.spec :as s])
+            #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async])
-                    [clojure.set :as set]
-                    [snergly.grid :as g]
-                    [snergly.util :as util]
-                    [snergly.grid :as grid]))
+            [clojure.set :as set]
+            [snergly.grid :as g]
+            [snergly.util :as util]
+            [snergly.grid :as grid]))
 
 ;; When adding a new algorithm, also add it to algorithm-functions below.
 (def algorithm-names
@@ -16,6 +18,17 @@
     "wilsons"
     "hunt-and-kill"
     "recursive-backtracker"})
+
+;; All of the algorithms obey the same interface.
+(defmacro fdef-algorithm [name]
+  (let [fn-name (str name "-seq")]
+    `(s/fdef ~(symbol fn-name)
+             :args (s/cat :grid ::g/grid)
+             :ret (s/and seq? (s/every ::g/grid)))))
+
+(doseq [alg algorithm-names]
+  (fdef-algorithm alg))
+(fdef-algorithm "pessimal")
 
 ;; necessary because (.indexOf) doesn't work properly in ClojureScript.
 (defn cljs-index-of [s val]
