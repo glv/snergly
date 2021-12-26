@@ -1,16 +1,16 @@
 (ns snergly.grid-test
   (:require [clojure.test :refer :all]
-            [clojure.spec :as s]
-            [clojure.spec.test :as st]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.test.alpha :as st]
             [snergly.grid :as g]))
 
-(st/instrument 'snergly.grid)
+(st/instrument)
 
 (deftest t-make-cell
-  (is (= {::g/pos [3 5]
-          ::g/max-pos [9 14]
-          ::g/links #{}}
-         (g/make-cell 3 5 10 15))))
+  (let [cell (g/make-cell 3 5 10 15)]
+    (testing "pos" (is (= (::g/pos cell) [3 5])))
+    (testing "max-pos" (is (= (::g/max-pos cell) [9 14])))
+    (testing "links" (is (= (::g/links cell) #{})))))
 
 (deftest t-cell-neighbor
   (testing "middle-cell"
@@ -119,8 +119,8 @@
 (deftest t-add-distances
   (let [dist (assoc (g/make-distances [0 0]) ::g/changed-cells #{[0 1] [2 3]})
         updated-dist (g/add-distances dist [[0 2] [2 3]] 1)]
-    (is (= 1 (updated-dist [0 2])))
-    (is (= 1 (updated-dist [2 3])))
+    (is (= 1 (g/cell-dist updated-dist [0 2])))
+    (is (= 1 (g/cell-dist updated-dist [2 3])))
     (is (= #{[0 1] [2 3] [0 2]} (::g/changed-cells updated-dist)))))
 
 (deftest t-grid-annotate-cells

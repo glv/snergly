@@ -3,9 +3,9 @@
   (:require [clojure.test :refer :all]
             [clojure.test.check.properties :as prop]
             [clojure.test.check.clojure-test :refer :all]
-            [clojure.spec :as s]
-            [clojure.spec.gen :as sg]
-            [clojure.spec.test :as st]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.gen.alpha :as sg]
+            [clojure.spec.test.alpha :as st]
             [clojure.set :as set]
             [snergly.algorithms :refer :all]
             [snergly.grid :as grid]))

@@ -1,7 +1,10 @@
 /target
 /classes
 /checkouts
+/node_modules
 /resources/public/js/**
+.cpcache/
+.shadow-cljs/
 figwheel_server.log
 pom.xml
 pom.xml.asc

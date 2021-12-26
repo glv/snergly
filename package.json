@@ -1,0 +1,28 @@
+{
+  "name": "snergly",
+  "version": "0.2.0",
+  "description": "Maze algorithms in Clojure (from Jamis Buck's /Mazes for Programmers/ book)",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glv/snergly.git"
+  },
+  "author": "Glenn Vanderburg",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/glv/snergly/issues"
+  },
+  "homepage": "https://github.com/glv/snergly#readme",
+  "dependencies": {
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "shadow-cljs": "^2.16.9"
+  }
+}

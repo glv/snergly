@@ -1,5 +1,6 @@
 (ns snergly.image
-  (:require [cljs.spec :as s]
+  (:require ; [cljs.spec :as s]
+            [clojure.spec.alpha :as s]
             [snergly.grid :as g]
             [snergly.util :as util]
             [clojure.set :as set]))
@@ -101,7 +102,7 @@
           ;; max-dist (if (:max-pos distances) (:max-dist distances) expected-max-dist)
           max-dist (::g/max-dist distances)
           color (if distance-map
-                  (util/make-color max-dist (distances pos) color-family)
+                  (util/make-color max-dist (g/cell-dist distances pos) color-family)
                   background)]
       (fill-rect g color x y w h))))
 

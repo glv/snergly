@@ -4,22 +4,23 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :main ^:skip-aot snergly.core
-  :dependencies [[org.clojure/clojure "1.9.0-alpha10"]
-                 [org.clojure/clojurescript "1.9.89"]
-                 [org.clojure/tools.cli "0.3.5"]
-                 [org.clojure/core.async "0.2.385"]
+  :dependencies [[org.clojure/clojure "1.10.3"]
+                 [org.clojure/clojurescript "1.10.914"]
+                 [org.clojure/tools.cli "1.0.206"]
+                 [org.clojure/core.async "1.5.648"]
+                 ;[org.clojure/spec.alpha "0.3.214"]
                  ;[sablono "0.4.0"]
-                 [org.omcljs/om "1.0.0-alpha34"] ; newest version is 1.0.0-alpha32
-                 [org.clojure/test.check "0.9.0"] ; just to download
+                 [org.omcljs/om "1.0.0-beta1"]
+                 [org.clojure/test.check "1.1.1"] ; just to download
                  ;[com.datomic/simulant "0.1.8"] ; just to download
                  ;[com.cognitect/transit-clj "0.8.285"] ; just to download
                  ;[com.cognitect/transit-cljs "0.8.232"] ; just to download
                  ;[datascript "0.13.1"] ; just to download
-                 [figwheel-sidecar "0.5.0-SNAPSHOT" :scope "test"]
+                 [figwheel-sidecar "0.5.4-6" :scope "test"]
                  ]
-  :profiles {:dev {:dependencies [[org.clojure/test.check "0.9.0"]]}}
-  :plugins [[lein-cljsbuild "1.1.3"]
-            [lein-figwheel "0.5.4-3"] ; may require reversion to old version
+  :profiles {:dev {:dependencies [[org.clojure/test.check "1.1.1"]]}}
+  :plugins [[lein-cljsbuild "1.1.8"]
+            [lein-figwheel "0.5.20"] ; may require reversion to old version
             ;[figwheel-sidecar "0.5.0-SNAPSHOT" :scope "test"] ; just to download
             ]
   :source-paths ["src"]

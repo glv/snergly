@@ -1,0 +1,9 @@
+{:deps     {:aliases [:dev]}
+ :dev-http {8000 "classpath:public"}
+ :builds   {:main {:target     :browser
+                   :output-dir "resources/public/js/main"
+                   :asset-path "/js/main"
+                   :modules    {:main {:init-fn snergly.fulcro/init
+                                       :entries [snergly.fulcro]}}
+                   :devtools   {:after-load snergly.fulcro/refresh
+                                :preloads   [com.fulcrologic.fulcro.inspect.preload]}}}}

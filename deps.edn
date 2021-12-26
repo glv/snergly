@@ -1,0 +1,9 @@
+{:paths   ["src/main" "resources"]
+ :deps    {org.clojure/clojure    {:mvn/version "1.10.3"}
+           org.clojure/core.async {:mvn/version "1.5.648"}
+           com.fulcrologic/fulcro {:mvn/version "3.5.9"}}
+
+ :aliases {:dev {:extra-paths ["src/dev"]
+                 :extra-deps  {org.clojure/clojurescript   {:mvn/version "1.10.914"}
+                               thheller/shadow-cljs        {:mvn/version "2.16.9"}
+                               binaryage/devtools          {:mvn/version "1.0.4"}}}}}

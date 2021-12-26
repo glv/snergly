@@ -1,8 +1,9 @@
 (ns snergly.algorithms
   #?(:clj (:import  [clojure.lang PersistentQueue]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
-  (:require #?(:clj [clojure.spec :as s]
-               :cljs [cljs.spec :as s])
+  (:require ; #?(:clj [clojure.spec :as s]
+            ;    :cljs [cljs.spec :as s])
+            [clojure.spec.alpha :as s]
             #?(:clj [clojure.core.async :as async :refer [go go-loop]]
                :cljs [cljs.core.async :as async])
             [clojure.set :as set]
@@ -255,8 +256,9 @@
 (defn distances-seq* [grid distances current frontier]
   (lazy-seq
     (let [cell (g/grid-cell grid current)
-          current-distance (distances current)
-          links (remove #(contains? distances %) (::g/links cell))
+          cell-dists (::g/cell-dists distances)
+          current-distance (cell-dists current)
+          links (remove #(contains? cell-dists %) (::g/links cell))
           next-frontier (apply conj frontier links)]
       (if (empty? next-frontier)
         (cons (assoc distances ::g/max-pos current) nil)
@@ -278,15 +280,15 @@
   (lazy-seq
     (if (= current origin)
       (cons breadcrumbs nil)
-      (let [current-distance (distances current)
-            neighbor (first (filter #(< (distances %) current-distance)
+      (let [current-distance (g/cell-dist distances current)
+            neighbor (first (filter #(< (g/cell-dist distances %) current-distance)
                                     (::g/links (g/grid-cell grid current))))
-            new-breadcrumbs (g/add-distances breadcrumbs [neighbor] (distances neighbor))]
+            new-breadcrumbs (g/add-distances breadcrumbs [neighbor] (g/cell-dist distances neighbor))]
       (cons new-breadcrumbs (path-seq* grid distances neighbor (g/begin-step new-breadcrumbs)))))))
 
 (defn path-seq [grid distances goal]
   (lazy-seq
-    (let [goal-distance (distances goal)
+    (let [goal-distance (g/cell-dist distances goal)
           breadcrumbs (assoc (g/add-distances (g/make-distances (::g/origin distances))
                                               [goal]
                                               goal-distance)

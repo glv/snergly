@@ -39,7 +39,7 @@
                     ui prev-dist-key longest?]
   (let [prev-distances (prev-dist-key r-state)
         goal (if longest? (::grid/max-pos prev-distances) [end-row end-col])
-        message (str "Plotting path (" (inc (prev-distances goal)) " cells long) …")
+        message (str "Plotting path (" (inc (grid/cell-dist prev-distances goal)) " cells long) …")
         new-r-state (assoc r-state ::i/status message)]
     (sequence (comp algs/updates-only
                     (map #(assoc new-r-state ::i/path %)))
