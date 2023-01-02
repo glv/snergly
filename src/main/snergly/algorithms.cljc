@@ -57,16 +57,16 @@
 ;; have the algorithm name as a name prefix (for example,
 ;; sidewinder-step).
 
-(defn binary-tree-seq* [grid coord]
-  (let [grid (g/begin-step grid)
-        cell (g/grid-cell grid coord)
-        neighbors (g/cell-neighbors cell [:north :east])]
-    (if (empty? neighbors)
-      grid
-      (g/link-cells grid cell (rand-nth neighbors)))))
-
-(defn binary-tree-seq [grid]
-  (reductions binary-tree-seq* (assoc grid ::g/algorithm-name "binary-tree") (g/grid-positions grid)))
+(defn binary-tree-seq
+  ([grid]
+    (reductions binary-tree-seq (assoc grid ::g/algorithm-name "binary-tree") (g/grid-positions grid)))
+  ([grid coord]
+    (let [grid (g/begin-step grid)
+          cell (g/grid-cell grid coord)
+          neighbors (g/cell-neighbors cell [:north :east])]
+      (if (empty? neighbors)
+        grid
+        (g/link-cells grid cell (rand-nth neighbors))))))
 
 (defn sidewinder-end-run? [cell]
   (let [on-east-side? (not (g/cell-neighbor cell :east))
